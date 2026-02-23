@@ -11,8 +11,10 @@ if __name__ == "__main__":
     
     # load dataset
     dataset = PennActionDataset(annotation_dir)
-    train_loader = DataLoader(dataset, batch_size=16, shuffle=True)
-    test_loader = DataLoader(dataset, batch_size=16, shuffle=False)
+    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(0.8*len(dataset)), len(dataset) - int(0.8*len(dataset))])
+
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
 
     print(f"Dataset size: {len(dataset)}")
@@ -63,29 +65,29 @@ if __name__ == "__main__":
         acc = correct / total
         print(f"Epoch {epoch+1}/{num_epochs} | Loss: {epoch_loss:.4f} | Accuracy: {acc:.4f}")
 
-        # Evaluation on test set
-        model.eval()
-        all_preds = []
-        all_labels = []
+    # Evaluation on test set
+    model.eval()
+    all_preds = []
+    all_labels = []
 
-        with torch.no_grad():
-            correct = 0
-            total = 0
-            for batch_x, batch_y in test_loader:
-                batch_x = batch_x.to(device)
-                batch_y = batch_y.long().to(device)
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        for batch_x, batch_y in test_loader:
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.long().to(device)
 
-                outputs = model(batch_x)  # (N, num_classes)
-                _, predicted = torch.max(outputs, 1)
+            outputs = model(batch_x)  # (N, num_classes)
+            _, predicted = torch.max(outputs, 1)
 
-                total += batch_y.size(0)
-                correct += (predicted == batch_y).sum().item()
+            total += batch_y.size(0)
+            correct += (predicted == batch_y).sum().item()
 
-                all_preds.append(predicted.cpu())
-                all_labels.append(batch_y.cpu())
+            all_preds.append(predicted.cpu())
+            all_labels.append(batch_y.cpu())
 
-            accuracy = correct / total
-            print(f"Test Accuracy: {accuracy:.4f}")
+        accuracy = correct / total
+        print(f"Test Accuracy: {accuracy:.4f}")
 
 
 
