@@ -3,27 +3,37 @@ import torch
 import torch.nn as nn
 from preprocess import PennActionDataset
 from model.model import STGCN
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from sklearn.model_selection import train_test_split
+
 
 if __name__ == "__main__":
     annotation_dir = "../Penn_Action/labels/"
     
     # load dataset
     dataset = PennActionDataset(annotation_dir)
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(0.8*len(dataset)), len(dataset) - int(0.8*len(dataset))])
+    train_idx, test_idx = train_test_split(
+        range(len(dataset)),
+        test_size=0.2,
+        stratify=dataset.labels,
+        random_state=42
+    )
+
+    train_dataset = Subset(dataset, train_idx)
+    test_dataset = Subset(dataset, test_idx)
 
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-
     print(f"Dataset size: {len(dataset)}")
 
-    num_classes = 2 # set based on your dataset
+    num_classes = len(dataset.action_to_label)
     num_joints = 13
 
     model = STGCN(num_class=num_classes, num_point=num_joints)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
     model = model.to(device)
 
     criterion = nn.CrossEntropyLoss()

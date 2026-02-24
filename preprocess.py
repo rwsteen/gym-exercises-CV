@@ -9,9 +9,34 @@ from torch.utils.data import Dataset
 class PennActionDataset(Dataset):
     def __init__(self, annotation_dir, seq_len=64):
         # get files in range of squats and pushups
-        self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat') and (1348 <= int(f.split('.')[0]) <= 1558 or 1659 <= int(f.split('.')[0]) <= 1889)]
+        self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat')]
         self.annotation_dir = annotation_dir
         self.seq_len = seq_len
+
+        self.action_to_label = {
+            'squat': 0,
+            'pushup': 1,
+            'bench_press': 2,
+            'pullup': 3,
+            'jumping_jacks': 4,
+            'situp': 5,
+            'tennis_serve': 6,
+            'bowl': 7,
+            'jump_rope': 8,
+            'baseball_pitch': 9,
+            'clean_and_jerk': 10,
+            'strum_guitar': 11,
+            'baseball_swing': 12,
+            'golf_swing': 13,
+            'tennis_forehand': 14
+        }
+
+        # Precompute labels for stratification
+        self.labels = []
+        for f in self.files:
+            path = os.path.join(self.annotation_dir, f)
+            _, _, _, label = load_mat_file(path)
+            self.labels.append(self.action_to_label[label])
 
     def __len__(self):
         return len(self.files)
@@ -26,12 +51,7 @@ class PennActionDataset(Dataset):
         skeleton = sample_frames(skeleton, self.seq_len)
 
         tensor = to_tensor(skeleton)
-        
-        action_to_label = {
-            'squat': 0,
-            'pushup': 1
-        }
-        label = torch.tensor(action_to_label[label], dtype=torch.long)
+        label = torch.tensor(self.labels[idx], dtype=torch.long)
 
         return tensor, label
     
