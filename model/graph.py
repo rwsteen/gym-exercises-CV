@@ -35,7 +35,15 @@ edges = [
     (7, 8),  # left_hip ↔ right_hip (pelvis)
 ]
 
-def build_penn_action_graph(V=V, edges=edges, strategy='spatial'):
+class PennActionGraph:
+    def __init__(self, strategy='spatial'):
+        self.num_node = 13
+        self.edge = edges
+        self.strategy = strategy
+        # Build adjacency matrix with left hip as center
+        self.A = build_penn_action_graph(V=self.num_node, edges=self.edge, strategy=strategy, center=7) 
+
+def build_penn_action_graph(V=V, edges=edges, strategy='spatial', center=7):
     if strategy == 'uniform':
         A = np.zeros((1, V, V))
         for i,j in edges:
@@ -44,20 +52,49 @@ def build_penn_action_graph(V=V, edges=edges, strategy='spatial'):
         return torch.tensor(A, dtype=torch.float32)
     
     elif strategy == 'spatial':
-        # ST-GCN standard: K=3
+        # compute hop distance from center for each node
+        dist = compute_hop_distance(V, edges, center)
+
         A = np.zeros((3,V,V))
+
+        # split edges into subsets based on distance to center
         for i,j in edges:
-            # put all edges in subset 0 (root/center)
-            A[0,i,j] = 1
-            A[0,j,i] = 1
+            if dist[i] == dist[j]:
+                subset = 0
+            elif dist[i] < dist[j]:
+                subset = 1
+            else:
+                subset = 2
+
+            A[subset,i,j] = 1
+            A[subset,j,i] = 1
+
+        # add self-connections to subset 0
+        for i in range(V):
+            A[0,i,i] = 1
+
         return torch.tensor(A, dtype=torch.float32)
 
-class PennActionGraph:
-    def __init__(self, strategy='spatial'):
-        self.num_node = 13
-        self.edge = edges
-        self.strategy = strategy
-        self.A = build_penn_action_graph(V=self.num_node, edges=self.edge, strategy=strategy)
+def compute_hop_distance(num_nodes, edges, center):
+    # Build adjacency matrix
+    A = np.zeros((num_nodes, num_nodes))
+    for i,j in edges:
+        A[i,j] = 1
+        A[j,i] = 1
+
+    # BFS to compute hop distance from center
+    dist = np.full(num_nodes, np.inf)
+    dist[center] = 0
+    queue = [center]
+
+    while queue:
+        node = queue.pop(0)
+        for neighbor in range(num_nodes):
+            if A[node, neighbor] > 0 and dist[neighbor] == np.inf:
+                dist[neighbor] = dist[node] + 1
+                queue.append(neighbor)
+
+    return dist.astype(int)
 
 # if __name__ == "__main__":
 #     A = build_penn_action_graph()
