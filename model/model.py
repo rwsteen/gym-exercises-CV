@@ -20,7 +20,7 @@ class STGCNBlock(nn.Module):
             with_res=True
         )
 
-        # Multi-Scale Temporal Convolution
+        # Temporal Convolution
         self.tcn = unit_tcn(
             out_channels,
             out_channels,
@@ -54,6 +54,7 @@ class STGCN(nn.Module):
 
         self.data_bn = nn.BatchNorm1d(num_person * in_channels * num_point)
 
+        # backbone layers
         self.layers = nn.ModuleList([
             STGCNBlock(in_channels, 64, A),
             STGCNBlock(64, 64, A),
@@ -65,7 +66,12 @@ class STGCN(nn.Module):
         ])
 
         self.pool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(256, num_class)
+
+        # Head 1: action classification
+        self.action_head = nn.Linear(256, num_class)
+
+        # Head 2: repetition counting
+        self.count_head = nn.Linear(256, 1)
 
     def forward(self, x):
         """
@@ -90,4 +96,8 @@ class STGCN(nn.Module):
         # Global average pooling over person, time, joints
         x = x.mean(dim=[1,3,4])   # (N, C_out)
 
-        return self.fc(x) # (N, num_class)
+        # heads
+        action = self.action_head(x) # (N, num_class)
+        count = self.count_head(x)   # (N, 1)
+
+        return action, count

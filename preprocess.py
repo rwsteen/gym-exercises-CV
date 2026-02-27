@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 # 1659-1889 files -> squats
 # 1348-1558 files -> pushups
 class PennActionDataset(Dataset):
-    def __init__(self, annotation_dir, seq_len=64):
+    def __init__(self, annotation_dir, seq_len=128):
         # get files in range of squats and pushups
         self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat')]
         self.annotation_dir = annotation_dir
@@ -45,15 +45,18 @@ class PennActionDataset(Dataset):
         path = os.path.join(self.annotation_dir, self.files[idx])
         x, y, visibility, label = load_mat_file(path)
 
+        # create skeleton representation
         skeleton = stack_joints(x, y)
         skeleton = root_center(skeleton)
         skeleton = scale_normalize(skeleton)
-        skeleton = sample_frames(skeleton, self.seq_len)
+
+        # sample or pad frames to fixed length
+        skeleton, rep_count = sample_frames(skeleton, self.seq_len)
 
         tensor = to_tensor(skeleton)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
 
-        return tensor, label
+        return tensor, label, rep_count
     
 # load .mat file and extract x, y, visibility, and action
 def load_mat_file(file_path):
@@ -76,7 +79,7 @@ def stack_joints_with_visibility(x, y, visibility):
     return skeleton
 
 # Root-Centered Normalization Pick pelvis/hip joint as root.
-def root_center(skeleton, root_index=2):
+def root_center(skeleton, root_index=7):
     root = skeleton[:, root_index:root_index+1, :] # shape: (num_frames, 2)
     skeleton -= root
     return skeleton
@@ -99,17 +102,26 @@ def scale_normalize(skeleton):
     return skeleton
 
 # Sample or pad frames to a fixed length
-def sample_frames(skeleton, target_len=64):
+def sample_frames(skeleton, target_len=128):
     T = skeleton.shape[0]
+    rep_count = 1  # default to 1 if no repetition
 
+    # If there are more frames than target_len, sample uniformly. If fewer, loop frames to simulate extra reps.
     if T >= target_len:
         indices = np.linspace(0, T-1, target_len).astype(int)
         skeleton = skeleton[indices]
     else:
-        pad = np.zeros((target_len - T, skeleton.shape[1], skeleton.shape[2]))
-        skeleton = np.concatenate([skeleton, pad], axis=0)
+        # how many full reps fit
+        reps = target_len // T
+        remainder = target_len % T
 
-    return skeleton
+        skeleton = np.concatenate([skeleton] * reps, axis=0)
+        if remainder > 0:
+            skeleton = np.concatenate([skeleton, skeleton[:remainder]], axis=0)
+
+        rep_count = reps + (1 if remainder > 0 else 0)
+
+    return skeleton, rep_count
 
 # convert to tensor format (C, T, V, M) where C is the number of channels (x, y, visibility), T is the number of frames, V is the number of joints, and M is the number of people (1 in this case)
 def to_tensor(skeleton):

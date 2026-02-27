@@ -13,6 +13,11 @@ if __name__ == "__main__":
     
     # load dataset
     dataset = PennActionDataset(annotation_dir)
+    print(f"Total samples in dataset: {len(dataset)}")
+    print(f"Action label distribution: {dataset.labels.count(0)} squats, {dataset.labels.count(1)} pushups")
+    print(f"Unique action labels: {set(dataset.labels)}")
+    print(f"Example tensor shape: {dataset[0][0].shape}, Example label: {dataset[0][1]}, Example rep count: {dataset[0][2]}")
+    print(f"Amount of samples per repetition count: {torch.bincount(torch.tensor([sample[2] for sample in dataset]))}")
     train_idx, test_idx = train_test_split(
         range(len(dataset)),
         test_size=0.2,
@@ -36,7 +41,8 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
     model = model.to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    action_loss = nn.CrossEntropyLoss()
+    count_loss = nn.SmoothL1Loss()
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=0.1,
@@ -51,53 +57,72 @@ if __name__ == "__main__":
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
-        correct = 0
-        total = 0
+        correct_action = 0
+        total_action = 0
+        total_count_error = 0
+        total_count_samples = 0
 
-        for batch_x, batch_y in train_loader:
+        for batch_x, batch_action, batch_count in train_loader:
             batch_x = batch_x.to(device)  # (N, C, T, V, M)
-            batch_y = batch_y.to(device)
+            batch_action = batch_action.to(device)
+            batch_count = batch_count.to(device)
 
             optimizer.zero_grad()
-            outputs = model(batch_x)      # (N, num_classes)
-            loss = criterion(outputs, batch_y)
+            action_logits, rep_count = model(batch_x)
+            loss_action = action_loss(action_logits, batch_action)
+            loss_count = count_loss(rep_count.squeeze(), batch_count.float())
+            loss = loss_action + 0.5 * loss_count  # combine losses (weighthed)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item() * batch_x.size(0)
-            _, predicted = torch.max(outputs, 1)
-            correct += (predicted == batch_y).sum().item()
-            total += batch_y.size(0)
+
+            # action accuracy
+            _, predicted_action = torch.max(action_logits, 1)
+            correct_action += (predicted_action == batch_action).sum().item()
+            total_action += batch_action.size(0)
+
+            # rep count mae
+            total_count_error += torch.abs(rep_count.squeeze() - batch_count.float()).sum().item()
+            total_count_samples += batch_count.size(0)
         
         scheduler.step()
 
-        epoch_loss = running_loss / total
-        acc = correct / total
-        print(f"Epoch {epoch+1}/{num_epochs} | Loss: {epoch_loss:.4f} | Accuracy: {acc:.4f}")
+        epoch_loss = running_loss / total_action
+        acc = correct_action / total_action if total_action > 0 else 0
+        mae = total_count_error / total_count_samples if total_count_samples > 0 else 0
+        print(f"Epoch {epoch+1}/{num_epochs} | Loss: {epoch_loss:.4f} | Accuracy: {acc:.4f} | MAE: {mae:.4f}")
 
     # Evaluation on test set
     model.eval()
-    all_preds = []
-    all_labels = []
+
+    total_count_error = 0
+    total_count_samples = 0
 
     with torch.no_grad():
-        correct = 0
-        total = 0
-        for batch_x, batch_y in test_loader:
+        correct_action = 0
+        total_action = 0
+
+        for batch_x, batch_action, batch_count in test_loader:
             batch_x = batch_x.to(device)
-            batch_y = batch_y.long().to(device)
+            batch_action = batch_action.long().to(device)
+            batch_count = batch_count.to(device)
 
-            outputs = model(batch_x)  # (N, num_classes)
-            _, predicted = torch.max(outputs, 1)
+            action_logits, rep_count = model(batch_x)
+            _, predicted_action = torch.max(action_logits, 1)
 
-            total += batch_y.size(0)
-            correct += (predicted == batch_y).sum().item()
+            # Action classification metrics
+            correct_action += (predicted_action == batch_action).sum().item()
+            total_action += batch_action.size(0)
 
-            all_preds.append(predicted.cpu())
-            all_labels.append(batch_y.cpu())
+            # Rep count metrics (MAE example)
+            total_count_error += torch.abs(rep_count.squeeze() - batch_count.float()).sum().item()
+            total_count_samples += batch_count.size(0)
 
-        accuracy = correct / total
+        accuracy = correct_action / total_action
+        mae = total_count_error / total_count_samples
         print(f"Test Accuracy: {accuracy:.4f}")
+        print(f"Test Average Rep Count Error: {mae:.4f}")
 
 
 

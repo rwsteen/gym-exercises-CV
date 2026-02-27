@@ -3,13 +3,12 @@ import torch.nn as nn
 
 class unit_tcn(nn.Module):
 
-    def __init__(self, in_channels, out_channels, kernel_size=9, stride=1, dilation=1, norm='BN', dropout=0):
+    def __init__(self, in_channels, out_channels, kernel_size=9, stride=1, dilation=1, dropout=0):
 
         super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.norm_cfg = norm if isinstance(norm, dict) else dict(type=norm)
         pad = (kernel_size + (kernel_size - 1) * (dilation - 1) - 1) // 2
 
         self.conv = nn.Conv2d(
