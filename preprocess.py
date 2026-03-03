@@ -6,7 +6,59 @@ from torch.utils.data import Dataset
 
 # 1659-1889 files -> squats
 # 1348-1558 files -> pushups
-class PennActionDataset(Dataset):
+# class PennActionDataset(Dataset):
+#     def __init__(self, annotation_dir, seq_len=128):
+#         # get files in range of squats and pushups
+#         self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat')]
+#         self.annotation_dir = annotation_dir
+#         self.seq_len = seq_len
+
+#         self.action_to_label = {
+#             'squat': 0,
+#             'pushup': 1,
+#             'bench_press': 2,
+#             'pullup': 3,
+#             'jumping_jacks': 4,
+#             'situp': 5,
+#             'tennis_serve': 6,
+#             'bowl': 7,
+#             'jump_rope': 8,
+#             'baseball_pitch': 9,
+#             'clean_and_jerk': 10,
+#             'strum_guitar': 11,
+#             'baseball_swing': 12,
+#             'golf_swing': 13,
+#             'tennis_forehand': 14
+#         }
+
+#         # Precompute labels for stratification
+#         self.labels = []
+#         for f in self.files:
+#             path = os.path.join(self.annotation_dir, f)
+#             _, _, _, label = load_mat_file(path)
+#             self.labels.append(self.action_to_label[label])
+
+#     def __len__(self):
+#         return len(self.files)
+
+#     def __getitem__(self, idx):
+#         path = os.path.join(self.annotation_dir, self.files[idx])
+#         x, y, visibility, label = load_mat_file(path)
+
+#         # create skeleton representation
+#         skeleton = stack_joints(x, y)
+#         skeleton = root_center(skeleton)
+#         skeleton = scale_normalize(skeleton)
+
+#         # sample or pad frames to fixed length
+#         skeleton, rep_count = sample_frames(skeleton, self.seq_len)
+
+#         tensor = to_tensor(skeleton)
+#         label = torch.tensor(self.labels[idx], dtype=torch.long)
+
+#         return tensor, label, rep_count
+
+class AugmentedPennActionDataset(Dataset):
     def __init__(self, annotation_dir, seq_len=128):
         # get files in range of squats and pushups
         self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat')]
@@ -35,15 +87,15 @@ class PennActionDataset(Dataset):
         self.labels = []
         for f in self.files:
             path = os.path.join(self.annotation_dir, f)
-            _, _, _, label = load_mat_file(path)
+            _, _, _, label, _, _ = load_mat_file(path)
             self.labels.append(self.action_to_label[label])
-
+    
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
         path = os.path.join(self.annotation_dir, self.files[idx])
-        x, y, visibility, label = load_mat_file(path)
+        x, y, visibility, label, rep_count, nframes = load_mat_file(path)
 
         # create skeleton representation
         skeleton = stack_joints(x, y)
@@ -51,12 +103,13 @@ class PennActionDataset(Dataset):
         skeleton = scale_normalize(skeleton)
 
         # sample or pad frames to fixed length
-        skeleton, rep_count = sample_frames(skeleton, self.seq_len)
+        skeleton = sample_frames(skeleton, self.seq_len)
 
         tensor = to_tensor(skeleton)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
+        rep_count = torch.tensor(rep_count, dtype=torch.float32)
 
-        return tensor, label, rep_count
+        return tensor, label, rep_count, nframes
     
 # load .mat file and extract x, y, visibility, and action
 def load_mat_file(file_path):
@@ -65,8 +118,10 @@ def load_mat_file(file_path):
     y = mat["y"] # shape: (num_frames, num_joints)
     visibility = mat["visibility"] # shape: (num_frames, num_joints)
     action = mat["action"][0]
+    rep_count = mat["rep_count"][0][0]
+    nframes = mat["nframes"][0][0]
 
-    return x, y, visibility, action
+    return x, y, visibility, action, rep_count, nframes
 
 # stack x and y to create a skeleton representation
 def stack_joints(x, y):
@@ -104,24 +159,17 @@ def scale_normalize(skeleton):
 # Sample or pad frames to a fixed length
 def sample_frames(skeleton, target_len=128):
     T = skeleton.shape[0]
-    rep_count = 1  # default to 1 if no repetition
 
-    # If there are more frames than target_len, sample uniformly. If fewer, loop frames to simulate extra reps.
+    # If there are more frames than target_len, sample uniformly. If fewer, pad with 0.
     if T >= target_len:
         indices = np.linspace(0, T-1, target_len).astype(int)
         skeleton = skeleton[indices]
     else:
-        # how many full reps fit
-        reps = target_len // T
-        remainder = target_len % T
+        pad_len = target_len - T
+        padding = np.zeros((pad_len, skeleton.shape[1], skeleton.shape[2]))
+        skeleton = np.concatenate((skeleton, padding), axis=0)
 
-        skeleton = np.concatenate([skeleton] * reps, axis=0)
-        if remainder > 0:
-            skeleton = np.concatenate([skeleton, skeleton[:remainder]], axis=0)
-
-        rep_count = reps + (1 if remainder > 0 else 0)
-
-    return skeleton, rep_count
+    return skeleton
 
 # convert to tensor format (C, T, V, M) where C is the number of channels (x, y, visibility), T is the number of frames, V is the number of joints, and M is the number of people (1 in this case)
 def to_tensor(skeleton):
@@ -130,3 +178,23 @@ def to_tensor(skeleton):
     tensor = tensor.unsqueeze(-1)     # (C, T, V, 1)
     return tensor
 
+if __name__ == "__main__":
+    dataset = AugmentedPennActionDataset(annotation_dir="augmentation/augmented_penn/labels")
+    print(f"Dataset size: {len(dataset)}")
+    tensor, label, rep_count, nframes = dataset[0]
+    print(f"Tensor shape: {tensor.shape}, Label: {label}, Repetition count: {rep_count}")
+
+    # print top 5 highest counts in the dataset and min max frames
+    rep_counts = []
+    nframes_list = []
+    for i in range(len(dataset)):
+        _, label, rep_count, nframes = dataset[i]
+        rep_counts.append(rep_count.item())
+        nframes_list.append(int(nframes))
+
+    print(f"Min frames: {min(nframes_list)}, Max frames: {max(nframes_list)}")
+    print(f"Unique repetition counts in dataset: {set(rep_counts)}")
+    # Print top 5 highest
+    top_frames = sorted(nframes_list, reverse=True)[:5]
+    print(f"Top 5 highest frame counts: {top_frames}")
+    
