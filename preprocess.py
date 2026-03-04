@@ -3,6 +3,7 @@ import scipy.io
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 
 # 1659-1889 files -> squats
 # 1348-1558 files -> pushups
@@ -59,7 +60,7 @@ from torch.utils.data import Dataset
 #         return tensor, label, rep_count
 
 class AugmentedPennActionDataset(Dataset):
-    def __init__(self, annotation_dir, seq_len=128):
+    def __init__(self, annotation_dir, seq_len=240):
         # get files in range of squats and pushups
         self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat')]
         self.annotation_dir = annotation_dir
@@ -109,7 +110,7 @@ class AugmentedPennActionDataset(Dataset):
         label = torch.tensor(self.labels[idx], dtype=torch.long)
         rep_count = torch.tensor(rep_count, dtype=torch.float32)
 
-        return tensor, label, rep_count, nframes
+        return tensor, label, rep_count
     
 # load .mat file and extract x, y, visibility, and action
 def load_mat_file(file_path):
@@ -157,7 +158,7 @@ def scale_normalize(skeleton):
     return skeleton
 
 # Sample or pad frames to a fixed length
-def sample_frames(skeleton, target_len=128):
+def sample_frames(skeleton, target_len=240):
     T = skeleton.shape[0]
 
     # If there are more frames than target_len, sample uniformly. If fewer, pad with 0.
@@ -171,30 +172,35 @@ def sample_frames(skeleton, target_len=128):
 
     return skeleton
 
-# convert to tensor format (C, T, V, M) where C is the number of channels (x, y, visibility), T is the number of frames, V is the number of joints, and M is the number of people (1 in this case)
+# convert to tensor format (C, T, V, M) where C is the number of channels (x, y, visibility), 
+# T is the number of frames, V is the number of joints, and M is the number of people (1 in this case)
 def to_tensor(skeleton):
     tensor = torch.tensor(skeleton, dtype=torch.float32)
     tensor = tensor.permute(2, 0, 1)   # (C, T, V)
     tensor = tensor.unsqueeze(-1)     # (C, T, V, 1)
     return tensor
 
-if __name__ == "__main__":
-    dataset = AugmentedPennActionDataset(annotation_dir="augmentation/augmented_penn/labels")
-    print(f"Dataset size: {len(dataset)}")
-    tensor, label, rep_count, nframes = dataset[0]
-    print(f"Tensor shape: {tensor.shape}, Label: {label}, Repetition count: {rep_count}")
+# if __name__ == "__main__":
+#     dataset = AugmentedPennActionDataset(annotation_dir="augmentation/augmented_penn/labels")
+#     print(f"Dataset size: {len(dataset)}")
+#     tensor, label, rep_count, nframes = dataset[0]
+#     print(f"Tensor shape: {tensor.shape}, Label: {label}, Repetition count: {rep_count}")
 
-    # print top 5 highest counts in the dataset and min max frames
-    rep_counts = []
-    nframes_list = []
-    for i in range(len(dataset)):
-        _, label, rep_count, nframes = dataset[i]
-        rep_counts.append(rep_count.item())
-        nframes_list.append(int(nframes))
+#     # print top 5 highest counts in the dataset and min max frames
+#     rep_counts = []
+#     nframes_list = []
+#     for i in range(len(dataset)):
+#         _, label, rep_count, nframes = dataset[i]
+#         rep_counts.append(rep_count.item())
+#         nframes_list.append(int(nframes))
 
-    print(f"Min frames: {min(nframes_list)}, Max frames: {max(nframes_list)}")
-    print(f"Unique repetition counts in dataset: {set(rep_counts)}")
-    # Print top 5 highest
-    top_frames = sorted(nframes_list, reverse=True)[:5]
-    print(f"Top 5 highest frame counts: {top_frames}")
+#     print(f"Min frames: {min(nframes_list)}, Max frames: {max(nframes_list)}")
+#     print(f"Unique repetition counts in dataset: {set(rep_counts)}")
+#     # Print top 5 highest, mean, median nframes
+#     top_frames = sorted(nframes_list, reverse=True)[:5]
+#     print(f"Top 5 highest frame counts: {top_frames}")
+#     print(f"Mean frames: {np.mean(nframes_list)}, Median frames: {np.median(nframes_list)}")
+#     # count how many nframes are above 300
+#     above_300 = sum(1 for n in nframes_list if n > 240)
+#     print(f"Number of samples with more than 240 frames: {above_300}")
     

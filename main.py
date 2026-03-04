@@ -1,7 +1,7 @@
 import os
 import torch
 import torch.nn as nn
-from preprocess import PennActionDataset
+from preprocess import AugmentedPennActionDataset
 from model.model import STGCN
 from torch.utils.data import DataLoader, Subset
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -9,15 +9,15 @@ from sklearn.model_selection import train_test_split
 
 
 if __name__ == "__main__":
-    annotation_dir = "../Penn_Action/labels/"
+    annotation_dir = "./augmentation/augmented_penn/labels"
     
     # load dataset
-    dataset = PennActionDataset(annotation_dir)
+    dataset = AugmentedPennActionDataset(annotation_dir)
     print(f"Total samples in dataset: {len(dataset)}")
     print(f"Action label distribution: {dataset.labels.count(0)} squats, {dataset.labels.count(1)} pushups")
     print(f"Unique action labels: {set(dataset.labels)}")
     print(f"Example tensor shape: {dataset[0][0].shape}, Example label: {dataset[0][1]}, Example rep count: {dataset[0][2]}")
-    print(f"Amount of samples per repetition count: {torch.bincount(torch.tensor([sample[2] for sample in dataset]))}")
+
     train_idx, test_idx = train_test_split(
         range(len(dataset)),
         test_size=0.2,
