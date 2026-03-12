@@ -1,2 +1,4 @@
 **/__pycache__
-Penn_Action/
+**/augmentation/
+**/.vscode/
+**/Penn_Action/
