@@ -51,7 +51,7 @@ if __name__ == "__main__":
         nesterov=True
     )
 
-    num_epochs = 20
+    num_epochs = 150
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=0)
 
     for epoch in range(num_epochs):
@@ -123,6 +123,10 @@ if __name__ == "__main__":
         mae = total_count_error / total_count_samples
         print(f"Test Accuracy: {accuracy:.4f}")
         print(f"Test Average Rep Count Error: {mae:.4f}")
+    
+    # save model
+    torch.save(model.state_dict(), "stgcn_model.pth")
+    print("Model saved.")
 
 
 
