@@ -172,8 +172,8 @@ def sample_frames(skeleton, target_len=240):
 
     return skeleton
 
-# convert to tensor format (C, T, V, M) where C is the number of channels (x, y, visibility), 
-# T is the number of frames, V is the number of joints, and M is the number of people (1 in this case)
+# convert to tensor format (C, T, V, M) where C is the number of channels (x, y), 
+# T is the number of frames, V is the number of joints, and M is the number of people (always 1 for penn action dataset)
 def to_tensor(skeleton):
     tensor = torch.tensor(skeleton, dtype=torch.float32)
     tensor = tensor.permute(2, 0, 1)   # (C, T, V)

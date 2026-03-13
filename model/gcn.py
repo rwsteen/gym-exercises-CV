@@ -1,30 +1,24 @@
 import torch
 import torch.nn as nn
 
-EPS = 1e-4
-
-
 class unit_gcn(nn.Module):
 
     def __init__(self,
                  in_channels,
                  out_channels,
                  A,
-                 adaptive='importance',
                  with_res=True):
 
         super().__init__()
 
         self.num_subsets = A.size(0)
-        self.adaptive = adaptive
         self.with_res = with_res
 
         # Base adjacency
-        self.A = nn.Parameter(A.clone(), requires_grad=(adaptive=='init'))
-
-        # Importance / offset learning
-        if adaptive in ['importance', 'offset']:
-            self.PA = nn.Parameter(torch.ones_like(A))
+        self.A = nn.Parameter(A.clone(), requires_grad=False)
+ 
+        # Learnable importance weights
+        self.PA = nn.Parameter(torch.ones_like(A))
 
         # Feature projection (pre-conv)
         self.conv = nn.Conv2d(in_channels,
@@ -51,13 +45,8 @@ class unit_gcn(nn.Module):
         n, c, t, v = x.shape
         res = self.down(x)
 
-        # Adaptive adjacency
-        if self.adaptive == 'importance':
-            A = self.A * self.PA
-        elif self.adaptive == 'offset':
-            A = self.A + self.PA
-        else:
-            A = self.A
+        # importance weighting
+        A = self.A * self.PA
 
         # Pre-conv
         x = self.conv(x)

@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from .graph import PennActionGraph
 from .gcn import unit_gcn
-from .tcn import mstcn, unit_tcn
+from .tcn import unit_tcn
 
 class STGCNBlock(nn.Module):
     def __init__(self, in_channels, out_channels, A,
@@ -16,7 +16,6 @@ class STGCNBlock(nn.Module):
             in_channels,
             out_channels,
             A,
-            adaptive='importance',
             with_res=True
         )
 
