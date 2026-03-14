@@ -69,8 +69,8 @@ class STGCN(nn.Module):
         # Head 1: action classification
         self.action_head = nn.Linear(256, num_class)
 
-        # Head 2: repetition counting
-        self.count_head = nn.Linear(256, 1)
+        # Head 2: phase prediction
+        self.phase_head = nn.Conv1d(256, 1, kernel_size=1)
 
     def forward(self, x):
         """
@@ -92,11 +92,15 @@ class STGCN(nn.Module):
         # reshape back
         x = x.view(N, M, x.size(1), x.size(2), x.size(3)) # (N, M, C_out, T_out, V_out)
 
-        # Global average pooling over person, time, joints
-        x = x.mean(dim=[1,3,4])   # (N, C_out)
+        # average over persons and joints
+        x = x.mean(dim=[1,4])   # (N, C_out, T_out)
 
-        # heads
-        action = self.action_head(x) # (N, num_class)
-        count = self.count_head(x)   # (N, 1)
+        # action classification
+        action_feat = x.mean(dim=2)  # (N, C_out)
+        action = self.action_head(action_feat) # (N, num_class)
 
-        return action, count
+        # phase prediction
+        phase = self.phase_head(x)   # (N, 1, T_out)
+        phase = phase.squeeze(1)    # (N, T_out)
+
+        return action, phase
