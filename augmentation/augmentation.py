@@ -12,6 +12,7 @@ import glob
 from pathlib import Path
 import random
 from PIL import Image
+from scipy.signal import find_peaks
 
 PER_FRAME_KEYS = {"x", "y", "visibility", "bbox"}
 
@@ -142,8 +143,13 @@ def make_aug_variant(base_dir, old_id, suffix, aug_kind, params):
         T = int(data["x"].shape[0])
         data["nframes"] = np.array([[T]], dtype=np.int32)
 
+    # Generate phase labels
+    phase = generate_phase_labels(data)
+    if phase is not None:
+        data["phase"] = phase
+
     save_mat(dst_mat, data)
-    return new_id    
+    return new_id
 
 def augment_random_subset(base_dir="augmented_penn", fraction=0.4, seed=13):
     labels_dir = os.path.join(base_dir, "labels")
@@ -174,6 +180,58 @@ def augment_random_subset(base_dir="augmented_penn", fraction=0.4, seed=13):
 
     print("Augmentation done")
 
+# generate phase labels for original data (before augmentation)
+def generate_phase_labels(label_data):
+
+    if "y" not in label_data:
+        return None
+
+    y = label_data["y"]
+    action = label_data["action"][0]
+
+    # choose joint
+    if action == "squat":
+        joint_idx = 7 if label_data["visibility"][:,7].mean() > label_data["visibility"][:,8].mean() else 8
+    elif action == "pushup":
+        joint_idx = 1 if label_data["visibility"][:,1].mean() > label_data["visibility"][:,2].mean() else 2
+    else:
+        return None
+
+    signal = y[:, joint_idx]
+
+    # normalize between 0 and 1
+    min_y = np.min(signal)
+    max_y = np.max(signal)
+
+    norm = (signal - min_y) / (max_y - min_y + 1e-6)
+
+    # invert so TOP = 1, BOTTOM = 0
+    phase = 1 - norm
+
+    return phase.reshape(-1,1)
+
+# Annotate original data with phase labels to allow exercise state analysis
+def annotate_original_phases(base_dir="augmented_penn"):
+    labels_dir = os.path.join(base_dir, "labels")
+
+    mats = glob.glob(os.path.join(labels_dir, "*.mat"))
+
+    for m in mats:
+        data = load_clean_mat(m)
+
+        data = ensure_float(data)
+
+        phase = generate_phase_labels(data)
+
+        if phase is not None:
+            data["phase"] = phase
+
+        save_mat(m, data)
+
+    print("Phase annotation complete")
+
+# first annotate original data with phase labels, then augment a random subset to create a more diverse training set
+annotate_original_phases()
 augment_random_subset()
 
 
