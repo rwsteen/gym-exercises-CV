@@ -60,57 +60,78 @@ import torch.nn.functional as F
 #         return tensor, label, rep_count
 
 class AugmentedPennActionDataset(Dataset):
-    def __init__(self, annotation_dir, seq_len=240):
-        # get files in range of squats and pushups
-        self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat')]
+
+    def __init__(self, annotation_dir, window_size=64, stride=1):
+
         self.annotation_dir = annotation_dir
-        self.seq_len = seq_len
+        self.window_size = window_size
+        self.stride = stride
 
-        self.action_to_label = {
-            'squat': 0,
-            'pushup': 1,
-            'bench_press': 2,
-            'pullup': 3,
-            'jumping_jacks': 4,
-            'situp': 5,
-            'tennis_serve': 6,
-            'bowl': 7,
-            'jump_rope': 8,
-            'baseball_pitch': 9,
-            'clean_and_jerk': 10,
-            'strum_guitar': 11,
-            'baseball_swing': 12,
-            'golf_swing': 13,
-            'tennis_forehand': 14
-        }
+        self.allowed_actions = ["squat", "pushup"]
 
-        # Precompute labels for stratification
-        self.labels = []
-        for f in self.files:
-            path = os.path.join(self.annotation_dir, f)
-            _, _, _, label, _, _ = load_mat_file(path)
-            self.labels.append(self.action_to_label[label])
-    
+        self.files = []
+        self.file_labels = []
+        self.samples = []
+        self.sample_labels = []
+
+        for f in os.listdir(annotation_dir):
+
+            if not f.endswith(".mat"):
+                continue
+
+            path = os.path.join(annotation_dir, f)
+            mat = scipy.io.loadmat(path)
+
+            action = mat["action"][0]
+
+            if action not in self.allowed_actions:
+                continue
+
+            self.files.append(f)
+            self.file_labels.append(0 if action == "squat" else 1)
+
+            T = mat["x"].shape[0]
+
+            for start in range(0, T - window_size + 1, stride):
+                self.samples.append((f, start))
+                self.sample_labels.append(0 if action == "squat" else 1)
+
+
+
     def __len__(self):
-        return len(self.files)
+        return len(self.samples)
+
 
     def __getitem__(self, idx):
-        path = os.path.join(self.annotation_dir, self.files[idx])
-        x, y, visibility, label, rep_count, nframes = load_mat_file(path)
 
-        # create skeleton representation
+        file_name, start = self.samples[idx]
+
+        path = os.path.join(self.annotation_dir, file_name)
+
+        x, y, visibility, action, phase, nframes = load_mat_file(path)
+
         skeleton = stack_joints(x, y)
         skeleton = root_center(skeleton)
         skeleton = scale_normalize(skeleton)
 
-        # sample or pad frames to fixed length
-        skeleton = sample_frames(skeleton, self.seq_len)
+        end = start + self.window_size
 
-        tensor = to_tensor(skeleton)
-        label = torch.tensor(self.labels[idx], dtype=torch.long)
-        rep_count = torch.tensor(rep_count, dtype=torch.float32)
+        skeleton_window = skeleton[start:end]
+        phase_window = phase[start:end]
 
-        return tensor, label, rep_count
+        tensor = to_tensor(skeleton_window)
+
+        phase_tensor = torch.tensor(
+            phase_window.squeeze(-1),
+            dtype=torch.float32
+        )
+
+        label = torch.tensor(
+            0 if action == "squat" else 1,
+            dtype=torch.long
+        )
+
+        return tensor, phase_tensor, label
     
 # load .mat file and extract x, y, visibility, and action
 def load_mat_file(file_path):
@@ -118,11 +139,11 @@ def load_mat_file(file_path):
     x = mat["x"] # shape: (num_frames, num_joints)
     y = mat["y"] # shape: (num_frames, num_joints)
     visibility = mat["visibility"] # shape: (num_frames, num_joints)
+    phase = mat["phase"] # shape: (num_frames, 1)
     action = mat["action"][0]
-    rep_count = mat["rep_count"][0][0]
     nframes = mat["nframes"][0][0]
 
-    return x, y, visibility, action, rep_count, nframes
+    return x, y, visibility, action, phase, nframes
 
 # stack x and y to create a skeleton representation
 def stack_joints(x, y):
@@ -154,6 +175,9 @@ def bbox_normalize(skeleton, bbox):
 # Root-Centered + scale by body size
 def scale_normalize(skeleton):
     max_val = np.max(np.abs(skeleton))
+    if max_val < 1e-6:
+        print("Warning: max_val is very small, skipping normalization to avoid division by zero.")
+        return skeleton
     skeleton = skeleton / (max_val + 1e-6)
     return skeleton
 
