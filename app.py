@@ -9,7 +9,7 @@ import csv
 from model.model import STGCN
 
 # load model
-NUM_CLASSES = 15
+NUM_CLASSES = 2
 NUM_JOINTS = 13
 model = STGCN(num_class=NUM_CLASSES, num_point=NUM_JOINTS)
 model.load_state_dict(torch.load("stgcn_model.pth", map_location=torch.device("cpu")))
@@ -18,20 +18,7 @@ model.eval()
 # Penn Action dataset labels
 exercise_labels = [
     "squat",
-    "pushup",
-    "bench_press",
-    "pullup",
-    "jumping_jacks",
-    "situp",
-    "tennis_serve",
-    "bowl",
-    "jump_rope",
-    "baseball_pitch",
-    "clean_and_jerk",
-    "strum_guitar",
-    "baseball_swing",
-    "golf_swing",
-    "tennis_forehand"
+    "pushup"
 ]
 
 # MediaPipe pose landmarks to Penn Action joints mapping
@@ -127,6 +114,9 @@ if start:
         joint_buffer = [] # buffer to hold joint data for T frames
         pred_action = "N/A"
         pred_count = 0
+        prev_phase = "N/A"
+        T_smooth = 5
+        phase_buffer = []
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -157,11 +147,21 @@ if start:
                 if len(joint_buffer) == T:
                     x = buffer_to_tensor(joint_buffer) # (1, C, T, V, 1)
                     with torch.no_grad():
-                        action, count = model(x)
+                        action, phase = model(x)
 
                     pred_action = exercise_labels[torch.argmax(action).item()]
-                    pred_count = int(count.item())
+                    
+                    # get current phase from model (last frame in the window)
+                    phase_np = phase.squeeze().cpu().numpy()  # (T,)
+                    phase = phase_np[-1]
 
+                    if prev_phase == "N/A":
+                        prev_phase = "up" if phase > 0.5 else "down"
+                    elif prev_phase == "up" and phase < 0.3:
+                        prev_phase = "down"
+                    elif prev_phase == "down" and phase > 0.7:
+                        pred_count += 1
+                        prev_phase = "up"
                 
                 mp_drawing.draw_landmarks(
                     frame,
