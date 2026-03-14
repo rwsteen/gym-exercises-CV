@@ -14,26 +14,36 @@ if __name__ == "__main__":
     # load dataset
     dataset = AugmentedPennActionDataset(annotation_dir)
     print(f"Total samples in dataset: {len(dataset)}")
-    print(f"Action label distribution: {dataset.labels.count(0)} squats, {dataset.labels.count(1)} pushups")
-    print(f"Unique action labels: {set(dataset.labels)}")
-    print(f"Example tensor shape: {dataset[0][0].shape}, Example label: {dataset[0][1]}, Example rep count: {dataset[0][2]}")
+    print(f"dataset file labels distribution: {dataset.file_labels.count(0)} squats, {dataset.file_labels.count(1)} pushups")
 
-    train_idx, test_idx = train_test_split(
-        range(len(dataset)),
+    # split dataset by file to avoid data leakage between train and test sets
+    train_file_idx, test_file_idx = train_test_split(
+        range(len(dataset.files)),
         test_size=0.2,
-        stratify=dataset.labels,
+        stratify=dataset.file_labels,
         random_state=42
     )
 
-    train_dataset = Subset(dataset, train_idx)
-    test_dataset = Subset(dataset, test_idx)
+    train_files = [dataset.files[i] for i in train_file_idx]
+    test_files = [dataset.files[i] for i in test_file_idx]
+
+    train_indices = []
+    test_indices = []
+    for i, (file_name, start) in enumerate(dataset.samples):
+        if file_name in train_files:
+            train_indices.append(i)
+        elif file_name in test_files:
+            test_indices.append(i)
+
+    train_dataset = Subset(dataset, train_indices)
+    test_dataset = Subset(dataset, test_indices)
 
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
     print(f"Dataset size: {len(dataset)}")
 
-    num_classes = len(dataset.action_to_label)
+    num_classes = len(dataset.allowed_actions)
     num_joints = 13
 
     model = STGCN(num_class=num_classes, num_point=num_joints)
@@ -42,12 +52,12 @@ if __name__ == "__main__":
     model = model.to(device)
 
     action_loss = nn.CrossEntropyLoss()
-    count_loss = nn.SmoothL1Loss()
+    phase_loss = nn.MSELoss()
     optimizer = torch.optim.SGD(
         model.parameters(),
-        lr=0.1,
+        lr=0.001,
         momentum=0.9,
-        weight_decay=0.0005,
+        weight_decay=5e-4,
         nesterov=True
     )
 
@@ -62,16 +72,17 @@ if __name__ == "__main__":
         total_count_error = 0
         total_count_samples = 0
 
-        for batch_x, batch_action, batch_count in train_loader:
+        for batch_x, batch_phase, batch_action in train_loader:
             batch_x = batch_x.to(device)  # (N, C, T, V, M)
             batch_action = batch_action.to(device)
-            batch_count = batch_count.to(device)
+            batch_phase = batch_phase.to(device)
+            batch_phase = batch_phase[:, ::4]  # downsample phase labels to match model output (every 4 frames)
 
             optimizer.zero_grad()
-            action_logits, rep_count = model(batch_x)
+            action_logits, phase = model(batch_x)
             loss_action = action_loss(action_logits, batch_action)
-            loss_count = count_loss(rep_count.squeeze(), batch_count.float())
-            loss = loss_action + 0.5 * loss_count  # combine losses (weighthed)
+            loss_phase = phase_loss(phase, batch_phase.float())
+            loss = loss_action + loss_phase  # combine losses (weighthed)
             loss.backward()
             optimizer.step()
 
@@ -82,9 +93,9 @@ if __name__ == "__main__":
             correct_action += (predicted_action == batch_action).sum().item()
             total_action += batch_action.size(0)
 
-            # rep count mae
-            total_count_error += torch.abs(rep_count.squeeze() - batch_count.float()).sum().item()
-            total_count_samples += batch_count.size(0)
+            # phase prediction mae
+            total_count_error += torch.abs(phase.squeeze() - batch_phase.float()).sum().item()
+            total_count_samples += batch_phase.size(0)
         
         scheduler.step()
 
@@ -103,21 +114,22 @@ if __name__ == "__main__":
         correct_action = 0
         total_action = 0
 
-        for batch_x, batch_action, batch_count in test_loader:
+        for batch_x, batch_phase, batch_action in test_loader:
             batch_x = batch_x.to(device)
             batch_action = batch_action.long().to(device)
-            batch_count = batch_count.to(device)
+            batch_phase = batch_phase.to(device)
+            batch_phase = batch_phase[:, ::4]  # downsample phase labels to match model output
 
-            action_logits, rep_count = model(batch_x)
+            action_logits, phase = model(batch_x)
             _, predicted_action = torch.max(action_logits, 1)
 
             # Action classification metrics
             correct_action += (predicted_action == batch_action).sum().item()
             total_action += batch_action.size(0)
 
-            # Rep count metrics (MAE example)
-            total_count_error += torch.abs(rep_count.squeeze() - batch_count.float()).sum().item()
-            total_count_samples += batch_count.size(0)
+            # Phase prediction metrics (MAE example)
+            total_count_error += torch.abs(phase.squeeze() - batch_phase.float()).sum().item()
+            total_count_samples += batch_phase.size(0)
 
         accuracy = correct_action / total_action
         mae = total_count_error / total_count_samples
