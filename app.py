@@ -9,18 +9,20 @@ import csv
 from model.model import STGCN
 
 # load model
-NUM_CLASSES = 2
+NUM_CLASSES = 4
 NUM_JOINTS = 13
-model = STGCN(num_class=NUM_CLASSES, num_point=NUM_JOINTS)
+model = STGCN(num_class=NUM_CLASSES, num_point=NUM_JOINTS, in_channels=3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
-model.load_state_dict(torch.load("stgcn_model.pth", map_location=device))
+model.load_state_dict(torch.load("stgcn_epoch150.pth", map_location=device))
 model.eval()
 
 # Penn Action dataset labels
 exercise_labels = [
     "squat",
-    "pushup"
+    "pushup",
+    "situp",
+    "bench_press"
 ]
 
 # MediaPipe pose landmarks to Penn Action joints mapping
@@ -40,14 +42,14 @@ PENN_JOINTS = [
     28   # right_ankle
 ]
 
-def extract_penn_joints(results, V=13, C=2):
+def extract_penn_joints(results, V=13, C=3):
     joints = np.zeros((V, C)) # (V, C)
 
     if results.pose_landmarks:
         landmarks = results.pose_landmarks.landmark
 
         for i, mp_idx in enumerate(PENN_JOINTS):
-            joints[i] = [landmarks[mp_idx].x, landmarks[mp_idx].y]
+            joints[i] = [landmarks[mp_idx].x, landmarks[mp_idx].y, landmarks[mp_idx].visibility]
     
     return joints
     
@@ -83,6 +85,8 @@ if start:
         cap = cv2.VideoCapture("temp.mp4")
 
     frame_count = 0
+    phase_min = None
+    phase_max = None
 
     # Process video frames and extract pose landmarks with MediaPipe
     with mp_pose.Pose(
@@ -93,7 +97,7 @@ if start:
 
         T = 16 # Number of frames to process for each sample (for model input)
         V = 13 # Number of joints (Penn Action dataset)
-        C = 2 # only x and y coordinates as channels
+        C = 3 # only x and y coordinates as channels
 
         joint_buffer = [] # buffer to hold joint data for T frames
         pred_action = "N/A"
@@ -120,10 +124,10 @@ if start:
                 for lm in results.pose_landmarks.landmark:
                     row += [lm.x, lm.y, lm.z, lm.visibility]
                 
-                joints = extract_penn_joints(results, V, C) # (13, 2)
+                joints = extract_penn_joints(results, V, C) # (13, 3)
 
                 # Add joints to buffer
-                joints = np.array(joints) # (V, 2)
+                joints = np.array(joints) # (V, 3)
                 joint_buffer.append(joints)
 
                 if len(joint_buffer) > T:
@@ -138,14 +142,15 @@ if start:
                     
                     # get current phase from model
                     phase_np = phase.squeeze().cpu().numpy()  # (T,)
-                    phase = phase_np[-1]
-                    print("phase", phase)
+                    phase_angle = np.arctan2(phase_np[0, -1], phase_np[1, -1]) # atan2(sin, cos)
+                    phase_norm = (phase_angle + np.pi) / (2 * np.pi)  # normalize to [0, 1]
+                    print("phase:", phase_norm)
 
                     if prev_phase == "N/A":
-                        prev_phase = "up" if phase > 0.5 else "down"
-                    elif prev_phase == "up" and phase < 0.3:
+                        prev_phase = "up" if phase_norm > 0.5 else "down"
+                    elif prev_phase == "up" and phase_norm < 0.5:
                         prev_phase = "down"
-                    elif prev_phase == "down" and phase > 0.7:
+                    elif prev_phase == "down" and phase_norm > 0.5:
                         pred_count += 1
                         prev_phase = "up"
                 

@@ -194,6 +194,10 @@ def generate_phase_labels(label_data):
         joint_idx = 7 if label_data["visibility"][:,7].mean() > label_data["visibility"][:,8].mean() else 8
     elif action == "pushup":
         joint_idx = 1 if label_data["visibility"][:,1].mean() > label_data["visibility"][:,2].mean() else 2
+    elif action == "situp":
+        joint_idx = 1 if label_data["visibility"][:,1].mean() > label_data["visibility"][:,2].mean() else 2
+    elif action == "bench_press":
+        joint_idx = 5 if label_data["visibility"][:,5].mean() > label_data["visibility"][:,6].mean() else 6
     else:
         return None
 

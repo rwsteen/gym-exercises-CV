@@ -44,7 +44,7 @@ class STGCN(nn.Module):
                  num_class,
                  num_point,
                  num_person=1,
-                 in_channels=2):
+                 in_channels=3):
 
         super().__init__()
 
@@ -85,7 +85,7 @@ class STGCN(nn.Module):
         self.action_head = nn.Linear(64, num_class)
 
         # Head 2: phase prediction
-        self.phase_head = nn.Conv1d(64, 1, kernel_size=1)
+        self.phase_head = nn.Conv1d(64, 2, kernel_size=1)
 
     def forward(self, x):
         """
@@ -115,7 +115,7 @@ class STGCN(nn.Module):
         action = self.action_head(action_feat) # (N, num_class)
 
         # phase prediction
-        phase = self.phase_head(x)   # (N, 1, T_out)
-        phase = phase.squeeze(1)    # (N, T_out)
+        phase = self.phase_head(x)   # (N, 2, T_out)
+        phase = phase.permute(0, 2, 1) # (N, T_out, 2)
 
         return action, phase

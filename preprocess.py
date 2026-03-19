@@ -7,13 +7,13 @@ import torch.nn.functional as F
 
 class AugmentedPennActionDataset(Dataset):
 
-    def __init__(self, annotation_dir, window_size=16, stride=1):
+    def __init__(self, annotation_dir, window_size=16, stride=8):
 
         self.annotation_dir = annotation_dir
         self.window_size = window_size
         self.stride = stride
 
-        self.allowed_actions = ["squat", "pushup"]
+        self.allowed_actions = ["squat", "pushup", "situp", "bench_press"]
 
         self.files = []
         self.file_labels = []
@@ -34,13 +34,13 @@ class AugmentedPennActionDataset(Dataset):
                 continue
 
             self.files.append(f)
-            self.file_labels.append(0 if action == "squat" else 1)
+            self.file_labels.append(self.allowed_actions.index(action))
 
             T = mat["x"].shape[0]
 
             for start in range(0, T - window_size + 1, stride):
                 self.samples.append((f, start))
-                self.sample_labels.append(0 if action == "squat" else 1)
+                self.sample_labels.append(self.allowed_actions.index(action))
 
 
 
@@ -54,9 +54,9 @@ class AugmentedPennActionDataset(Dataset):
 
         path = os.path.join(self.annotation_dir, file_name)
 
-        x, y, visibility, action, phase, nframes = load_mat_file(path)
+        x, y, visibility, action, phase = load_mat_file(path)
 
-        skeleton = stack_joints(x, y)
+        skeleton = stack_joints(x, y, visibility)
         skeleton = root_center(skeleton)
         skeleton = scale_normalize(skeleton)
 
@@ -67,13 +67,17 @@ class AugmentedPennActionDataset(Dataset):
 
         tensor = to_tensor(skeleton_window)
 
+        phase = phase_window.squeeze(-1) * 2 * np.pi  # convert to radians
+        phase_sin = np.sin(phase)
+        phase_cos = np.cos(phase)
+
         phase_tensor = torch.tensor(
-            phase_window.squeeze(-1),
+            np.stack([phase_sin, phase_cos], axis=1),
             dtype=torch.float32
         )
 
         label = torch.tensor(
-            0 if action == "squat" else 1,
+            self.allowed_actions.index(action),
             dtype=torch.long
         )
 
@@ -87,24 +91,18 @@ def load_mat_file(file_path):
     visibility = mat["visibility"] # shape: (num_frames, num_joints)
     phase = mat["phase"] # shape: (num_frames, 1)
     action = mat["action"][0]
-    nframes = mat["nframes"][0][0]
 
-    return x, y, visibility, action, phase, nframes
+    return x, y, visibility, action, phase
 
-# stack x and y to create a skeleton representation
-def stack_joints(x, y):
-    skeleton = np.stack((x, y), axis=2)
-    return skeleton
-
-# stack x, y, and visibility to create a skeleton representation with visibility
-def stack_joints_with_visibility(x, y, visibility):
+# stack x, y, and visibility to create a skeleton representation
+def stack_joints(x, y, visibility):
     skeleton = np.stack((x, y, visibility), axis=2)
     return skeleton
 
 # Root-Centered Normalization Pick pelvis/hip joint as root.
-def root_center(skeleton, root_index=7):
-    root = skeleton[:, root_index:root_index+1, :] # shape: (num_frames, 2)
-    skeleton -= root
+def root_center(skeleton, left_hip_index=7, right_hip_index=8):
+    hip_midpoint = (skeleton[:, left_hip_index:left_hip_index+1, :2] + skeleton[:, right_hip_index:right_hip_index+1, :2]) / 2.0 # only x and y channels
+    skeleton[:, :, :2] -= hip_midpoint
     return skeleton
 
 # BBox Normalization Use bbox for scale invariance
@@ -120,11 +118,11 @@ def bbox_normalize(skeleton, bbox):
 
 # Root-Centered + scale by body size
 def scale_normalize(skeleton):
-    max_val = np.max(np.abs(skeleton))
+    max_val = np.max(np.abs(skeleton[:, :, :2]))  # only consider x and y channels for scaling
     if max_val < 1e-6:
         print("Warning: max_val is very small, skipping normalization to avoid division by zero.")
         return skeleton
-    skeleton = skeleton / (max_val + 1e-6)
+    skeleton[:, :, :2] /= (max_val + 1e-6)
     return skeleton
 
 # Sample or pad frames to a fixed length
