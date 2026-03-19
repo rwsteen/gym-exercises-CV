@@ -76,7 +76,7 @@ if __name__ == "__main__":
             batch_x = batch_x.to(device)  # (N, C, T, V, M)
             batch_action = batch_action.to(device)
             batch_phase = batch_phase.to(device)
-            batch_phase = batch_phase[:, ::4]  # downsample phase labels to match model output (every 4 frames)
+            batch_phase = batch_phase[:, ::2]  # downsample phase labels to match model output
 
             optimizer.zero_grad()
             action_logits, phase = model(batch_x)
@@ -104,6 +104,10 @@ if __name__ == "__main__":
         mae = total_count_error / total_count_samples if total_count_samples > 0 else 0
         print(f"Epoch {epoch+1}/{num_epochs} | Loss: {epoch_loss:.4f} | Accuracy: {acc:.4f} | MAE: {mae:.4f}")
 
+        if (epoch + 1) % 10 == 0:
+            torch.save(model.state_dict(), f"stgcn_epoch{epoch+1}.pth")
+            print(f"Model checkpoint saved at epoch {epoch+1}")
+
     # Evaluation on test set
     model.eval()
 
@@ -118,7 +122,7 @@ if __name__ == "__main__":
             batch_x = batch_x.to(device)
             batch_action = batch_action.long().to(device)
             batch_phase = batch_phase.to(device)
-            batch_phase = batch_phase[:, ::4]  # downsample phase labels to match model output
+            batch_phase = batch_phase[:, ::2]  # downsample phase labels to match model output
 
             action_logits, phase = model(batch_x)
             _, predicted_action = torch.max(action_logits, 1)
