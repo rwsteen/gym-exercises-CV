@@ -5,63 +5,9 @@ import torch
 from torch.utils.data import Dataset
 import torch.nn.functional as F
 
-# 1659-1889 files -> squats
-# 1348-1558 files -> pushups
-# class PennActionDataset(Dataset):
-#     def __init__(self, annotation_dir, seq_len=128):
-#         # get files in range of squats and pushups
-#         self.files = [f for f in os.listdir(annotation_dir) if f.endswith('.mat')]
-#         self.annotation_dir = annotation_dir
-#         self.seq_len = seq_len
-
-#         self.action_to_label = {
-#             'squat': 0,
-#             'pushup': 1,
-#             'bench_press': 2,
-#             'pullup': 3,
-#             'jumping_jacks': 4,
-#             'situp': 5,
-#             'tennis_serve': 6,
-#             'bowl': 7,
-#             'jump_rope': 8,
-#             'baseball_pitch': 9,
-#             'clean_and_jerk': 10,
-#             'strum_guitar': 11,
-#             'baseball_swing': 12,
-#             'golf_swing': 13,
-#             'tennis_forehand': 14
-#         }
-
-#         # Precompute labels for stratification
-#         self.labels = []
-#         for f in self.files:
-#             path = os.path.join(self.annotation_dir, f)
-#             _, _, _, label = load_mat_file(path)
-#             self.labels.append(self.action_to_label[label])
-
-#     def __len__(self):
-#         return len(self.files)
-
-#     def __getitem__(self, idx):
-#         path = os.path.join(self.annotation_dir, self.files[idx])
-#         x, y, visibility, label = load_mat_file(path)
-
-#         # create skeleton representation
-#         skeleton = stack_joints(x, y)
-#         skeleton = root_center(skeleton)
-#         skeleton = scale_normalize(skeleton)
-
-#         # sample or pad frames to fixed length
-#         skeleton, rep_count = sample_frames(skeleton, self.seq_len)
-
-#         tensor = to_tensor(skeleton)
-#         label = torch.tensor(self.labels[idx], dtype=torch.long)
-
-#         return tensor, label, rep_count
-
 class AugmentedPennActionDataset(Dataset):
 
-    def __init__(self, annotation_dir, window_size=64, stride=1):
+    def __init__(self, annotation_dir, window_size=16, stride=1):
 
         self.annotation_dir = annotation_dir
         self.window_size = window_size
@@ -203,28 +149,4 @@ def to_tensor(skeleton):
     tensor = tensor.permute(2, 0, 1)   # (C, T, V)
     tensor = tensor.unsqueeze(-1)     # (C, T, V, 1)
     return tensor
-
-# if __name__ == "__main__":
-#     dataset = AugmentedPennActionDataset(annotation_dir="augmentation/augmented_penn/labels")
-#     print(f"Dataset size: {len(dataset)}")
-#     tensor, label, rep_count, nframes = dataset[0]
-#     print(f"Tensor shape: {tensor.shape}, Label: {label}, Repetition count: {rep_count}")
-
-#     # print top 5 highest counts in the dataset and min max frames
-#     rep_counts = []
-#     nframes_list = []
-#     for i in range(len(dataset)):
-#         _, label, rep_count, nframes = dataset[i]
-#         rep_counts.append(rep_count.item())
-#         nframes_list.append(int(nframes))
-
-#     print(f"Min frames: {min(nframes_list)}, Max frames: {max(nframes_list)}")
-#     print(f"Unique repetition counts in dataset: {set(rep_counts)}")
-#     # Print top 5 highest, mean, median nframes
-#     top_frames = sorted(nframes_list, reverse=True)[:5]
-#     print(f"Top 5 highest frame counts: {top_frames}")
-#     print(f"Mean frames: {np.mean(nframes_list)}, Median frames: {np.median(nframes_list)}")
-#     # count how many nframes are above 300
-#     above_300 = sum(1 for n in nframes_list if n > 240)
-#     print(f"Number of samples with more than 240 frames: {above_300}")
     
