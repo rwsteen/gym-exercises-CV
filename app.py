@@ -161,8 +161,8 @@ if start:
                 )
 
                 # Draw black rectangles behind the text
-                cv2.rectangle(frame, (5, 5), (250, 50), (0,0,0), -1)   # rectangle for exercise
-                cv2.rectangle(frame, (5, 55), (150, 100), (0,0,0), -1) # rectangle for count
+                cv2.rectangle(frame, (5, 5), (300, 50), (0,0,0), -1)   # rectangle for exercise
+                cv2.rectangle(frame, (5, 55), (200, 100), (0,0,0), -1) # rectangle for count
 
                 # Overlay text on top
                 cv2.putText(frame, f"Exercise: {pred_action}", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
