@@ -12,7 +12,9 @@ from model.model import STGCN
 NUM_CLASSES = 2
 NUM_JOINTS = 13
 model = STGCN(num_class=NUM_CLASSES, num_point=NUM_JOINTS)
-model.load_state_dict(torch.load("stgcn_model.pth", map_location=torch.device("cpu")))
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+model.load_state_dict(torch.load("stgcn_model.pth", map_location=device))
 model.eval()
 
 # Penn Action dataset labels
@@ -37,14 +39,6 @@ PENN_JOINTS = [
     27,  # left_ankle
     28   # right_ankle
 ]
-
-def buffer_to_tensor(buffer):
-    data = np.array(buffer) # (T, V, C)
-    data = data.transpose(2, 0, 1) # (C, T, V)
-    data = np.expand_dims(data, axis=0) # (1, C, T, V)
-    data = np.expand_dims(data, axis=-1) # (1, C, T, V, 1)
-
-    return torch.tensor(data, dtype=torch.float32)
 
 def extract_penn_joints(results, V=13, C=2):
     joints = np.zeros((V, C)) # (V, C)
@@ -88,26 +82,16 @@ if start:
         tfile.write(video_file.read())
         cap = cv2.VideoCapture("temp.mp4")
 
-    # Set up CSV file for writing landmarks (joints)
-    file = open("landmarks.csv", "w", newline="")
-    writer = csv.writer(file)
-
-    # Write header to CSV
-    header = ["frame"]
-    for i in range(33):
-        header += [f"x{i}", f"y{i}", f"z{i}", f"vis{i}"]
-    writer.writerow(header)
-
     frame_count = 0
 
     # Process video frames and extract pose landmarks with MediaPipe
     with mp_pose.Pose(
-        model_complexity=2,
+        model_complexity=0,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5
     ) as pose:
 
-        T = 64 # Number of frames to process for each sample (for model input)
+        T = 16 # Number of frames to process for each sample (for model input)
         V = 13 # Number of joints (Penn Action dataset)
         C = 2 # only x and y coordinates as channels
 
@@ -115,14 +99,18 @@ if start:
         pred_action = "N/A"
         pred_count = 0
         prev_phase = "N/A"
-        T_smooth = 5
-        phase_buffer = []
+        frame_skip = 4 # skip frames to reduce computation time
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
 
+            if frame_count % frame_skip != 0:
+                frame_count += 1
+                continue
+
             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image, (320, 240))
             results = pose.process(image)
 
             if results.pose_landmarks:
@@ -134,9 +122,6 @@ if start:
                 
                 joints = extract_penn_joints(results, V, C) # (13, 2)
 
-                # Write landmarks to CSV
-                writer.writerow(row)
-
                 # Add joints to buffer
                 joints = np.array(joints) # (V, 2)
                 joint_buffer.append(joints)
@@ -145,15 +130,16 @@ if start:
                     joint_buffer.pop(0) # keep only the last T frames
 
                 if len(joint_buffer) == T:
-                    x = buffer_to_tensor(joint_buffer) # (1, C, T, V, 1)
+                    x = torch.from_numpy(np.array(joint_buffer).transpose(2,0,1)[None,...,None]).float().to(device) # (1, C, T, V, 1)
                     with torch.no_grad():
                         action, phase = model(x)
 
                     pred_action = exercise_labels[torch.argmax(action).item()]
                     
-                    # get current phase from model (last frame in the window)
+                    # get current phase from model
                     phase_np = phase.squeeze().cpu().numpy()  # (T,)
                     phase = phase_np[-1]
+                    print("phase", phase)
 
                     if prev_phase == "N/A":
                         prev_phase = "up" if phase > 0.5 else "down"
@@ -177,4 +163,3 @@ if start:
             frame_placeholder.image(frame, channels="BGR")
 
     cap.release()
-    file.close()

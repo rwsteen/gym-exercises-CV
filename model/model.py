@@ -53,24 +53,39 @@ class STGCN(nn.Module):
 
         self.data_bn = nn.BatchNorm1d(num_person * in_channels * num_point)
 
-        # backbone layers
+        # backbone layers - Smaller model
+        # self.layers = nn.ModuleList([
+        #     STGCNBlock(in_channels, 16, A),
+        #     STGCNBlock(16, 32, A, stride=2),
+        #     STGCNBlock(32, 32, A),
+        # ])
+        
+        # backbone layers - Medium model
         self.layers = nn.ModuleList([
-            STGCNBlock(in_channels, 64, A),
+            STGCNBlock(in_channels, 32, A),
+            STGCNBlock(32, 32, A),
+            STGCNBlock(32, 64, A, stride=2),
             STGCNBlock(64, 64, A),
-            STGCNBlock(64, 64, A),
-            STGCNBlock(64, 128, A, stride=2),
-            STGCNBlock(128, 128, A),
-            STGCNBlock(128, 256, A, stride=2),
-            STGCNBlock(256, 256, A),
         ])
+
+        # # backbone layers - Bigger model
+        # self.layers = nn.ModuleList([
+        #     STGCNBlock(in_channels, 64, A),
+        #     STGCNBlock(64, 64, A),
+        #     STGCNBlock(64, 64, A),
+        #     STGCNBlock(64, 128, A, stride=2),
+        #     STGCNBlock(128, 128, A),
+        #     STGCNBlock(128, 256, A, stride=2),
+        #     STGCNBlock(256, 256, A),
+        # ])
 
         self.pool = nn.AdaptiveAvgPool2d((1,1))
 
         # Head 1: action classification
-        self.action_head = nn.Linear(256, num_class)
+        self.action_head = nn.Linear(64, num_class)
 
         # Head 2: phase prediction
-        self.phase_head = nn.Conv1d(256, 1, kernel_size=1)
+        self.phase_head = nn.Conv1d(64, 1, kernel_size=1)
 
     def forward(self, x):
         """
