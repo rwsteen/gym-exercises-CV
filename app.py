@@ -76,7 +76,7 @@ if start:
 
     # Set up video capture based on the selected source
     if video_source == "Webcam":
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
     else:
         tfile = open("temp.mp4", "wb")
         tfile.write(video_file.read())
@@ -155,8 +155,13 @@ if start:
                     mp_pose.POSE_CONNECTIONS
                 )
 
-                cv2.putText(frame, f"Exercise: {pred_action}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-                cv2.putText(frame, f"Count: {pred_count}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                # Draw black rectangles behind the text
+                cv2.rectangle(frame, (5, 5), (250, 50), (0,0,0), -1)   # rectangle for exercise
+                cv2.rectangle(frame, (5, 55), (150, 100), (0,0,0), -1) # rectangle for count
+
+                # Overlay text on top
+                cv2.putText(frame, f"Exercise: {pred_action}", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                cv2.putText(frame, f"Count: {pred_count}", (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
 
             frame_count += 1
 
