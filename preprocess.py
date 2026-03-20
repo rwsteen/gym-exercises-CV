@@ -13,7 +13,7 @@ class AugmentedPennActionDataset(Dataset):
         self.window_size = window_size
         self.stride = stride
 
-        self.allowed_actions = ["squat", "pushup", "situp", "bench_press"]
+        self.allowed_actions = ["squat", "pushup"]
 
         self.files = []
         self.file_labels = []

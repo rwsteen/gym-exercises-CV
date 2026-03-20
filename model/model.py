@@ -27,14 +27,20 @@ class STGCNBlock(nn.Module):
             stride=stride
         )
 
+        self.dropout = nn.Dropout(0.3)
+
         self.relu = nn.ReLU()
 
         # Residual
-        self.residual = unit_tcn(in_channels, out_channels, kernel_size=1, stride=stride)
+        if in_channels == out_channels and stride == 1:
+            self.residual = nn.Identity()
+        else:
+            self.residual = unit_tcn(in_channels, out_channels, kernel_size=1, stride=stride)
 
     def forward(self, x):
         res = self.residual(x)
-        x = self.tcn(self.gcn(x)) + res
+        x = self.tcn(self.gcn(x))
+        x = self.dropout(x) + res
         return self.relu(x)
     
 
@@ -68,7 +74,7 @@ class STGCN(nn.Module):
             STGCNBlock(64, 64, A),
         ])
 
-        # # backbone layers - Bigger model
+        # backbone layers - Bigger model
         # self.layers = nn.ModuleList([
         #     STGCNBlock(in_channels, 64, A),
         #     STGCNBlock(64, 64, A),
@@ -81,11 +87,8 @@ class STGCN(nn.Module):
 
         self.pool = nn.AdaptiveAvgPool2d((1,1))
 
-        # Head 1: action classification
+        # action classification
         self.action_head = nn.Linear(64, num_class)
-
-        # Head 2: phase prediction
-        self.phase_head = nn.Conv1d(64, 2, kernel_size=1)
 
     def forward(self, x):
         """
@@ -107,15 +110,11 @@ class STGCN(nn.Module):
         # reshape back
         x = x.view(N, M, x.size(1), x.size(2), x.size(3)) # (N, M, C_out, T_out, V_out)
 
-        # average over persons and joints
-        x = x.mean(dim=[1,4])   # (N, C_out, T_out)
+        # average over persons
+        x = x.mean(dim=1)
 
         # action classification
-        action_feat = x.mean(dim=2)  # (N, C_out)
+        action_feat = x.mean(dim=[2, 3]) # average over time and joints -> (N, C_out)
         action = self.action_head(action_feat) # (N, num_class)
 
-        # phase prediction
-        phase = self.phase_head(x)   # (N, 2, T_out)
-        phase = phase.permute(0, 2, 1) # (N, T_out, 2)
-
-        return action, phase
+        return action
