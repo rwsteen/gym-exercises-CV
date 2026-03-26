@@ -11,7 +11,7 @@ class STGCNBlock(nn.Module):
 
         super().__init__()
 
-        # Spatial Graph Convolution (adaptive)
+        # Spatial Graph Convolution
         self.gcn = unit_gcn(
             in_channels,
             out_channels,
@@ -67,34 +67,31 @@ class STGCN(nn.Module):
         # ])
         
         # backbone layers - Medium model
-        self.layers = nn.ModuleList([
-            STGCNBlock(in_channels, 32, A),
-            STGCNBlock(32, 32, A),
-            STGCNBlock(32, 64, A, stride=2),
-            STGCNBlock(64, 64, A),
-        ])
+        # self.layers = nn.ModuleList([
+        #     STGCNBlock(in_channels, 32, A),
+        #     STGCNBlock(32, 32, A),
+        #     STGCNBlock(32, 64, A, stride=2),
+        #     STGCNBlock(64, 64, A),
+        # ])
 
         # backbone layers - Bigger model
-        # self.layers = nn.ModuleList([
-        #     STGCNBlock(in_channels, 64, A),
-        #     STGCNBlock(64, 64, A),
-        #     STGCNBlock(64, 64, A),
-        #     STGCNBlock(64, 128, A, stride=2),
-        #     STGCNBlock(128, 128, A),
-        #     STGCNBlock(128, 256, A, stride=2),
-        #     STGCNBlock(256, 256, A),
-        # ])
+        self.layers = nn.ModuleList([
+            STGCNBlock(in_channels, 64, A),
+            STGCNBlock(64, 64, A),
+            STGCNBlock(64, 64, A),
+            STGCNBlock(64, 128, A, stride=2),
+            STGCNBlock(128, 128, A),
+            STGCNBlock(128, 256, A, stride=2),
+            STGCNBlock(256, 256, A),
+        ])
 
         self.pool = nn.AdaptiveAvgPool2d((1,1))
 
         # action classification
-        self.action_head = nn.Linear(64, num_class)
+        self.action_head = nn.Linear(256, num_class)
 
     def forward(self, x):
-        """
-        x: (N, C, T, V, M) - batch size, channels, time steps, joints, persons
-        """
-
+        # x (N, C, T, V, M): batch size, channels, time steps, joints, persons
         N, C, T, V, M = x.shape
 
         # reshape for BN
