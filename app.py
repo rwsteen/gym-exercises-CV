@@ -64,7 +64,10 @@ def extract_penn_joints(results, prev_joints=None, V=13, C=3):
                     joints[i] = [0, 0, 0]
             else:
                 joints[i] = [lm.x, lm.y, lm.visibility]
+
+    return joints
     
+def normalize_joints(joints):
     # normalize root center
     left_hip = joints[7]
     right_hip = joints[8]
@@ -75,10 +78,8 @@ def extract_penn_joints(results, prev_joints=None, V=13, C=3):
     max_val = np.max(np.abs(joints[:, :2]))
     if max_val > 1e-6:
         joints[:, :2] /= max_val
-
-
-    return joints
     
+    return joints
 
 # Initialize MediaPipe Pose and Drawing utilities
 mp_pose = mp.solutions.pose
@@ -100,6 +101,11 @@ start = st.button("Start")
 
 frame_placeholder = st.empty()
 
+# Feedback section below the video
+feedback_header = st.empty()
+feedback_cols_placeholder = st.empty()
+detail_placeholder = st.empty()
+
 if start:
 
     # Set up video capture based on the selected source
@@ -119,21 +125,22 @@ if start:
         min_tracking_confidence=0.5
     ) as pose:
 
-        T = 16 # Number of frames to process for each sample (for model input)
+        T = 32 # Number of frames to process for each sample (for model input)
         V = 13 # Number of joints (Penn Action dataset)
-        C = 3 # only x and y coordinates as channels
+        C = 3 # only x and y coordinates as channels + visibility as a third channel
 
         joint_buffer = [] # buffer to hold joint data for T frames
-        pred_action = "N/A"
-        pred_count = 0
-        pred_shallow_rep = 0
-        deepnes = 0
+        pred_action = "N/A" # predicted exercise class
+        pred_count = 0 # predicted rep count
+        pred_shallow_rep = 0 # count of reps that were not deep enough based on form analysis
         prev_state = "up" # for counting reps (assumes starting in up position)
         frame_skip = 2 # skip frames to reduce computation time
-        back_hollow = 0
-        rounded_back = 0
-        perfect_form = 0
-        forward_bend2 = 0
+        deepness = 0 # cumulative deepness score for current rep, reset when rep is counted
+        back_hollow = 0 # count of frames with hollow back form for pushups
+        rounded_back = 0 # count of frames with rounded back form for pushups
+        perfect_form = 0 # count of frames with perfect form reps
+        forward_bend2 = 0 # count of frames with forward bend form for squats
+        feedback = {} # dictionary to hold form feedback metrics for the last analyzed T frames
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -149,9 +156,8 @@ if start:
 
             if results.pose_landmarks:
                 joints = []
-                
                 joints = extract_penn_joints(results) # (13, 3)
-                
+            
                 landmarks = results.pose_landmarks.landmark
 
                 left_vis_pu = (
@@ -181,12 +187,18 @@ if start:
                 if len(joint_buffer) > T:
                     joint_buffer.pop(0) # keep only the last T frames
 
+                # Once we have T frames of joint data, run the model and get predictions
                 if len(joint_buffer) == T:
-                    x = torch.from_numpy(np.array(joint_buffer).transpose(2,0,1)[None,...,None]).float().to(device) # (1, C, T, V, 1)
+                    normalized_joints_buffer = [normalize_joints(j) for j in joint_buffer]
+                    x = torch.from_numpy(np.array(normalized_joints_buffer).transpose(2,0,1)[None,...,None]).float().to(device) # (1, C, T, V, 1)
+
+                    # run model inference
                     with torch.no_grad():
                         action = model(x)
 
                     pred_action = exercise_labels[torch.argmax(action).item()]
+
+                    raw_joint_tensor = torch.from_numpy(np.array(joint_buffer).transpose(2,0,1)[None,...,None]).float().to(device) # (1, C, T, V, 1)
                     
                     if pred_action == "squat":
                         # determine which side is more visible
@@ -195,26 +207,32 @@ if start:
                         else:
                             visible_side = "right"
                         
-                        deep_enough, forward_bend = form_analysis(pred_action, prev_state, x, visible_side)
-                        deepnes += deep_enough
+                        # Analyze form and get feedback based on exercise type, phase, and visible side
+                        deep_enough, forward_bend, feedback = form_analysis(pred_action, prev_state, raw_joint_tensor, visible_side)
+                        deepness += deep_enough
+                    
+                        # track forward bend
                         if forward_bend == 0:
                             perfect_form += 1
                         else:
                             forward_bend2 += 1
-                        
-                        left_knee_angle = calculate_angle(joints[7,:2], joints[9,:2], joints[11,:2])
-                        right_knee_angle = calculate_angle(joints[8,:2], joints[10,:2], joints[12,:2])
-                        knee_angle = (left_knee_angle + right_knee_angle) / 2.0
-                        print(f"Knee angle: {knee_angle:.2f}")
 
-                        if knee_angle < 70 and prev_state == "up":
+                        # Calculate knee angle for counting reps from the more visible side
+                        knee_angle = 0
+                        if visible_side == "left":
+                            knee_angle = calculate_angle(joints[7,:2], joints[9,:2], joints[11,:2])
+                        else:
+                            knee_angle = calculate_angle(joints[8,:2], joints[10,:2], joints[12,:2])
+
+                        # Count reps based on phase deduced from knee angle
+                        if knee_angle < 120 and prev_state == "up":
                             prev_state = "down"
                         elif knee_angle > 160 and prev_state == "down":
                             pred_count += 1
                             prev_state = "up"
-                            if deepnes == 0:
+                            if deep_enough == 0:
                                 pred_shallow_rep += 1
-                            deepnes = 0
+                            deepness = 0
 
                     elif pred_action == "pushup":
                         # determine which side is more visible
@@ -223,8 +241,11 @@ if start:
                         else:
                             visible_side = "right"
                             
-                        deep_enough, back_form = form_analysis(pred_action, prev_state, x, visible_side)
-                        deepnes += deep_enough
+                        # Analyze form and get feedback based on exercise type, phase, and visible side
+                        deep_enough, back_form, feedback = form_analysis(pred_action, prev_state, raw_joint_tensor, visible_side)
+                        deepness += deep_enough
+
+                        # Track back form
                         if back_form > 0:
                             rounded_back += 1
                         elif back_form < 0:
@@ -232,20 +253,24 @@ if start:
                         else:
                             perfect_form += 1
                         
-                        left_elbow_angle = calculate_angle(joints[1,:2], joints[3,:2], joints[5,:2])
-                        right_elbow_angle = calculate_angle(joints[2,:2], joints[4,:2], joints[6,:2])
-                        elbow_angle = (left_elbow_angle + right_elbow_angle) / 2.0
-                        print(f"Elbow angle: {elbow_angle:.2f}")
+                        # Calculate elbow angle for counting reps from the more visible side
+                        elbow_angle = 0
+                        if visible_side == "left":
+                            elbow_angle = calculate_angle(joints[1,:2], joints[3,:2], joints[5,:2])
+                        else:
+                            elbow_angle = calculate_angle(joints[2,:2], joints[4,:2], joints[6,:2])
 
+                        # Count reps based on phase deduced from knee angle
                         if elbow_angle < 90 and prev_state == "up":
                             prev_state = "down"
                         elif elbow_angle > 120 and prev_state == "down":
                             pred_count += 1
                             prev_state = "up"
-                            if deepnes == 0:
+                            if deep_enough == 0:
                                 pred_shallow_rep += 1
-                            deepnes = 0
+                            deepness = 0
                 
+                # draw the pose annotation from mediapipe on the image
                 mp_drawing.draw_landmarks(
                     frame,
                     results.pose_landmarks,
@@ -253,21 +278,63 @@ if start:
                 )
 
                 # Draw black rectangles behind the text
-                cv2.rectangle(frame, (5, 5), (300, 50), (0,0,0), -1)   # rectangle for exercise
-                cv2.rectangle(frame, (5, 55), (200, 100), (0,0,0), -1) # rectangle for count
+                cv2.rectangle(frame, (5, 5), (300, 50), (0,0,0), -1)   # rectangle for classified exercise
+                cv2.rectangle(frame, (5, 55), (200, 100), (0,0,0), -1) # rectangle for total reps
+                cv2.rectangle(frame, (5, 115), (380, 175), (0,0,0), -1) # rectangle for shallow reps
 
                 # Overlay text on top
                 cv2.putText(frame, f"Exercise: {pred_action}", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-                cv2.putText(frame, f"Count: {pred_count}", (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-                cv2.putText(frame, f"Shallow: {pred_shallow_rep}", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-                if pred_action == "pushup":
-                    cv2.putText(frame, f"Hollow back: {back_hollow}, Rounded back: {rounded_back}, Good form: {perfect_form}", (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-                if pred_action == "squat":
-                    cv2.putText(frame, f"Forward bend: {forward_bend2}, Good form: {perfect_form}", (10, 800), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+                cv2.putText(frame, f"Reps: {pred_count}", (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                cv2.putText(frame, f"Shallow: {pred_shallow_rep}", (10, 155), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
 
 
             frame_count += 1
 
             frame_placeholder.image(frame, channels="BGR")
+
+            if feedback:
+                feedback_header.markdown(f"### Form Feedback — {pred_action.capitalize()}")
+ 
+                with feedback_cols_placeholder.container():
+                    if pred_action == "pushup":
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Good Form", perfect_form)
+                        with col2:
+                            st.metric("Rounded Back", rounded_back)
+                        with col3:
+                            st.metric("Hollow Back", back_hollow)
+ 
+                        col4, col5, col6 = st.columns(3)
+                        with col4:
+                            body_angle = feedback.get("body_angle", 0)
+                            st.metric("Body Angle", f"{body_angle:.1f}°")
+                        with col5:
+                            elbow_angle_fb = feedback.get("bottom_elbow_angle")
+                            if elbow_angle_fb is not None:
+                                st.metric("Bottom Elbow Angle", f"{elbow_angle_fb:.1f}°")
+                        with col6:
+                            hip_deviation = feedback.get("hip_deviation", 0)
+                            st.metric("Hip Deviation", f"{hip_deviation:.4f}")
+ 
+                    elif pred_action == "squat":
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Good Form", perfect_form)
+                        with col2:
+                            st.metric("Forward Lean", forward_bend2)
+ 
+                        col3, col4, col5 = st.columns(3)
+                        with col3:
+                            lean = feedback.get("torso_lean_angle", 0)
+                            st.metric("Torso Lean", f"{lean:.1f}°")
+                        with col4:
+                            knee_angle_fb = feedback.get("bottom_knee_angle")
+                            if knee_angle_fb is not None:
+                                st.metric("Bottom Knee Angle", f"{knee_angle_fb:.1f}°")
+                        with col5:
+                            valgus = feedback.get("knee_valgus", "N/A")
+                            valgus_icon = "✅" if valgus == "good" else ("⚠️" if valgus == "mild" else "❌" if valgus == "severe" else "❓")
+                            st.markdown(f"{valgus_icon} **Knee valgus:** {valgus}")
 
     cap.release()
