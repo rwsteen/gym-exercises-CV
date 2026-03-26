@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 class AugmentedPennActionDataset(Dataset):
 
-    def __init__(self, annotation_dir, window_size=16, stride=8):
+    def __init__(self, annotation_dir, window_size=32, stride=8):
 
         self.annotation_dir = annotation_dir
         self.window_size = window_size
