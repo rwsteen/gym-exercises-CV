@@ -55,15 +55,15 @@ The most complex capability of a gym assistant is providing corrective feedback.
 2. Explain augmentation strategy
 3. Motivate dataset choice and augmentation strategy
 
-## Proposed Method
+## Methodology
 
-1. introducte method
-2. explain why it solves the problem
+### Form analysis
+For the form analysis it is more difficult to make a data driven model. Most of the data present in gym exercise data sets only consist out of good performed exercises. This is why a rule-based form analysis is chosen. With a rule-based approach it is possible to set some thresholds for whether a good form is achieved, or that some aspects need to be improved. In this study both squads and pushups are used for form analysis. One of the most important criteria in both exercises, is that the movement is deep enough.
+The approach to finding the deepness from the exercise was almost identical for both exercises. First the model checks whether a rep was made, and after that the rule base system analyses whether this rep was deep enough. For the pushup, the most important joints where the shoulders and elbows, where for squats these are the hip and knee joints. For the pushup, the moment when the shoulder is at the same height as the elbow a good rep is achieved. For the squat this is when the hip is at the same height as the knee.
+For both exercises also the form of the back is analyzed. For pushups it is important to have a straight back for the whole movement. To keep track on this, a straight line was drawn from the knee position to shoulder position. If the hip was too far from this line a threshold was exceeded, which resulted in a hollow or rounded back counter going up. For the rules it is important to normalize the threshold in this specific analyzing task. For people that are longer, the threshold needs to be higher. For the squad it is important to not lean too much forward when performing. To keep track of this, the shoulders and feet should both be on the same vertical line. When this distance is too large, the person leans too much forward. Also, in this analysis, normalization is very important.
 
 ## Results / Experiments
 
 ## References
 
 [hier moet ik APA lijst van scribbr invoegen aan het einde]
-
-
