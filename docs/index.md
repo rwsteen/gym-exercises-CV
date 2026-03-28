@@ -90,6 +90,7 @@ Understanding a single frame of skeleton data tells you a pose but not an action
 The full model has seven ST-GCN blocks in sequence. The first three blocks operate at full temporal resolution and expand the channel depth from 3 to 64 channels, allowing the network to build up an internal representation of joint relationships and local motion. The fourth block introduces a stride of 2, halving the time dimension and doubling the channels to 128, the model starts to see broader motion patterns. The sixth block applies another strided downsampling, reaching 256 channels at quarter temporal resolution. By this point in the network, each feature vector encodes high-level, abstract information about how the whole body moved over the course of the clip. This progressive deepening of channels alongside temporal compression mirrors the design of standard image recognition networks, but adapted for the graph-structure of the data.
 
 ![My SVG](./stgcn_model.svg)
+*Figure 1: Pipeline of the medium size ST-GCN model for exercise classification. Input skeleton sequences are normalised via batch normalisation before passing through four backbone blocks, each containing a spatial graph convolution (GCN) and a temporal convolution (TCN). Block 3 uses a stride of 2 to halve the temporal resolution. The resulting features are collapsed via global average pooling and passed to a linear classifier to produce the final action prediction.*
 
 ### Exercise Classification
 
