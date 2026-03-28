@@ -111,3 +111,4 @@ For both exercises also the form of the back is analyzed. For pushups it is impo
 ## References
 
 [hier moet ik APA lijst van scribbr invoegen aan het einde]
+Yan, S., Xiong, Y., & Lin, D. (2018, April). Spatial temporal graph convolutional networks for skeleton-based action recognition. In Proceedings of the AAAI conference on artificial intelligence (Vol. 32, No. 1).
