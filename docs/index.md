@@ -15,15 +15,15 @@
 Figures:
 
 - dataset example frames
+- GIF with demo
+- screenshot of UI?
 
 ## Introduction
 
 In the last years, the popularity of the gym has been increasing. Most of these gyms have employees working in the gym to help people with exercises, but there are also a large number of gyms where no employee is present. This can cause difficulties for people who have just started to work out and have questions about certain gym exercises they are performing. To come with a solution, this blog proposes a virtual gym assistant. With new computer vision techniques like more accurate pose estimation methods, it becomes easier to track human movement. The proposed virtual gym assistant uses these techniques to classify the type of exercise, count the repetitions, and give feedback on how the exercise is performed and whether the form was correct. 
 
-[Where in recent papers rule based approaches are used for rep counting, this virtual assistant used training-based rep counting.] [TODO!]
-
-In this blog, we first discuss related work to get an idea of the models that are currently used for the aforementioned computer vision tasks. Next, we introduce the dataset used in this study and explain the motivation behind its selection. Then we discuss the methods used for exercise classification, repetition counting, and form feedback. Finally, we present several experiments conducted on both real-world [TODO!] data and self-recorded exercise videos to evaluate the performance of the video.
-
+In this blog, we first discuss related work to get an idea of the models that are currently used for the aforementioned computer vision tasks. Next, we introduce the dataset used in this study and explain the motivation behind its selection. Then we discuss the methods used for exercise classification, repetition counting, and form feedback. Finally, we present several experiments conducted on both test-data and unseen self-recorded exercise videos to evaluate the performance of the video.
+<!-- 
 ## Problem definition
 TODO: include this in the introduction chapter
 
@@ -32,34 +32,25 @@ The problem can be divided into multiple sub-problems:
 1. Pose Estimation: skeletonization of human
 2. Exercise classification
 3. Repetitive action counting: video-level or pose-level (= skeleton-level)
-4. Form analysis/feedback
+4. Form analysis/feedback -->
 
 
 ## Related Work
+Our main inspiration for this project is the research done by Riccio[14]. In his paper, Riccio showed a computer vision pipeline that was able to classify exercises and count repetitions. To improve upon Riccio's work, we decided to include form analysis and feedback. And for further literature review, we looked at recent advancements in computer vision driving virtual gym assistants. These advancements can be categorized into pose estimation, exercise classification, repetitive action counting (RAC), and form analysis.
 
-TODO: maak references af, en voeg stukje over Riccio toe.
+**Pose Estimation:** 
+To succesfully analyze human movement, accurate and fast pose estimation is essential. Early breakthroughs in this domain were made by models like OpenPose and AlphaPose, which introduced robust multi-person pose estimation using part affinity fields and top-down bounding box detection [3][6]. While highly accurate, these models can be computationally heavy. For a real-time gym assistant, low-latency processing on consumer hardware is crucial. This requirement leads to MediaPipe, particularly with its modern BlazePose model [13][2]. By utilizing a lightweight neural network architecture, BlazePose achieves real-time 3D skeleton tracking on mobile and edge devices, forming an ideal foundation for a virtual gym assistant.
 
-Our main inspiration for the methods used in this project is the research done by Riccio [14].
+**Exercise Classification:**
+Once a skeleton is extracted, the next step is determining which exercise the user is performing. Recent research has shifted heavily towards deep learning on skeletal data. Graph Convolutional Neural Networks (GCNs) became a well-known technique, as they naturally model the human skeleton as a spatial-temporal graph of joints and bones [15]. Building upon this, architectures like Graph Skeleton Transformer Networks (GSTN) have emerged, combining the structural awareness of graphs with the sequence-modeling power of Transformers, giving state-of-the-art accuracy with low latency for real-time classification of fitness movements[8].
 
-To contextualize our approach, the recent advancements in computer vision driving virtual gym assistants can be categorized into pose estimation, exercise classification, repetitive action counting (RAC), and form analysis.
+**Repetitive Action Counting (RAC):**
+Counting repetitions is a core feature of any gym assistant. Initial methods utilized simple State Machines, manually defining the start and end conditions of a repetition based on specific joint angles. However, these rule-based approaches lack robustness across different body types and camera angles. This led to data-driven methods such as RepNet, which learns period length directly from video frames, and transformer-based models like TransRAC and SSTRAC, which capture long-range temporal dependencies in repetitive actions [5][7][12]. Recent approaches emphasize efficiency and spatial-temporal skeleton dynamics; for instance, SPKDB-net[1] leverages salient-part pose keypoints for robust counting, while MSF-Mamba is considered state-of-the-art for RAC, as it combines linear state-space models with a motion-aware state fusion mechanism to detect subtle temporal patterns and repetitions efficiently and in real-time [11].
 
-**Pose Estimation** 
-To succesfully analyze human movement, accurate and fast pose estimation is essential. Early breakthroughs in this domain were made by models like OpenPose and AlphaPose, which introduced robust multi-person pose estimation using part affinity fields and top-down bounding box detection [3, 6]. While highly accurate, these models can be computationally heavy. For a real-time gym assistant, low-latency processing on consumer hardware is crucial. This requirement leads to MediaPipe, particularly with its modern BlazePose model [13, 2]. By utilizing a lightweight neural network architecture, BlazePose achieves real-time 3D skeleton tracking on mobile and edge devices, forming an ideal foundation for a virtual gym assistant.
-
-**Exercise Classification**
-Once a skeleton is extracted, the next step is determining which exercise the user is performing. Recent research has shifted heavily towards deep learning on skeletal data. Graph Convolutional Neural Networks (GCNs) became a well-known technique, as they naturally model the human skeleton as a spatial-temporal graph of joints and bones [15]. Building upon this, architectures like Graph Skeleton Transformer Networks (GSTN) have emerged, combining the structural awareness of graphs with the sequence-modeling power of Transformers, giving state-of-the-art accuracy with low latency for real-time classification of fitness movements [8].
-
-**Repetitive Action Counting (RAC)**
-Counting repetitions is a core feature of any gym assistant. Initial methods utilized simple State Machines, manually defining the start and end conditions of a repetition based on specific joint angles. However, these rule-based approaches lack robustness across different body types and camera angles. This led to data-driven methods such as RepNet, which learns period length directly from video frames, and transformer-based models like TransRAC and SSTRAC, which capture long-range temporal dependencies in repetitive actions [5, 7, 12]. Recent approaches emphasize efficiency and spatial-temporal skeleton dynamics; for instance, SPKDB-net [1] leverages salient-part pose keypoints for robust counting, while MSF-Mamba is considered state-of-the-art for RAC, as it combines linear state-space models with a motion-aware state fusion mechanism to detect subtle temporal patterns and repetitions efficiently and in real-time [11].
-
-**Form Analysis and Feedback**
-The most complex capability of a gym assistant is providing corrective feedback. Early systems relied heavily on logic-based algorithms, where an alert is triggered if a joint angle strays beyond a predefined limit [4]. Modern approaches treat incorrect form as a deviation from a learned baseline, employing anomaly detection algorithms to identify mistakes without needing explicitly labeled "bad form" data [9]. Furthermore, highly efficient methods like MSF-Mamba are actively being extended not just for counting, but to provide rich feedback, bridging the gap between simply tracking a workout and actively coaching the user in real-time.
+**Form Analysis and Feedback:**
+The most complex capability of a gym assistant is providing corrective feedback. Early systems relied heavily on logic-based algorithms, where an alert is triggered if a joint angle strays beyond a predefined limit [4]. Modern approaches treat incorrect form as a deviation from a learned baseline, employing anomaly detection algorithms to identify mistakes without needing explicitly labeled "bad form" data [9][10]. Furthermore, highly efficient methods like MSF-Mamba are actively being extended not just for counting, but to provide rich feedback, bridging the gap between simply tracking a workout and actively coaching the user in real-time.
 
 ## Data
-
-1. Introduce the dataset
-2. Explain augmentation strategy
-3. Motivate dataset choice and augmentation strategy
 
 ### Dataset
 The dataset that was used for this project was the Pen action dataset. This dataset offers a variety of movements from different sports. This dataset also includes different gym exercises like squats and pushups. A convenient aspect from this dataset is that the dataset tracks the joint positions constantly. This aspect is important for training the model, because joint positions give information about the state of the exercise and whether someone has a good form. Despite that this dataset has convenient aspects, it also has a downside. All exercises from the Penn action dataset only have one rep. For rep counting this is not ideal, because that way the system can think that all exercises only have one rep. With data augmentation this problem is resolved, while also enlarging the dataset.
@@ -132,9 +123,9 @@ For both exercises also the form of the back is analyzed. For pushups it is impo
 
 8. Jiang, Y., Sun, Z., Yu, S., Wang, S., & Song, Y. (2022). A Graph Skeleton Transformer Network for Action Recognition. Symmetry, 14(8), 1547. https://doi.org/10.3390/sym14081547 
 
-9. Kowsar, Y., Moshtaghi, M., Velloso, E., Kulik, L., & Leckie, C. (2016). Detecting unseen anomalies in weight training exercises. In OzCHI ’16: Proceedings of the 28th Australian Conference on Computer-Human Interaction (pp. 517–526). https://doi.org/10.1145/3010915.3010941 
+9. Kowsar, Y., Moshtaghi, M., Velloso, E., Kulik, L., & Leckie, C. (2016). Detecting unseen anomalies in weight training exercises. In OzCHI ’16: Proceedings of the 28th Australian Conference on Computer-Human Interaction (pp. 517–526). https://doi.org/10.1145/3010915.3010941
 
-10. LAZIER: A Virtual Fitness Coach Based on AI Technology. (2022, 23 september). IEEE Conference Publication | IEEE Xplore. https://ieeexplore.ieee.org/document/9927664 
+10. LAZIER: A Virtual Fitness Coach Based on AI Technology. (2022, 23 september). IEEE Conference Publication IEEE Xplore. https://ieeexplore.ieee.org/document/9927664 
 
 11. Li, D., Shao, J., Xing, B., Gao, R., Wen, B., Kälviäinen, H., & Liu, X. (2026). MSF-Mamba: Motion-aware State Fusion Mamba for Efficient Micro-Gesture Recognition. IEEE Transactions On Multimedia, 1–12. https://doi.org/10.1109/tmm.2026.3668511 
 
