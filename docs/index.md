@@ -107,11 +107,13 @@ For both exercises also the form of the back is analyzed. For pushups it is impo
 ### Experiments
 To test the model on robustness multiple experiments were conducted with video’s that were not in the dataset. These videos were self-created and included both squats and pushup of different rep ranges and were filmed from different angles. To make variety in test data, different locations were tested, with three participants in total. The test data consisted out of 20 video’s for pushups and 20 video’s for squats. Each video was validated separately with an accuracy for exercise prediction and an absolute error for rep counting, these metrics where automatically conducted by the application. The validation per exercise was done to also obtain visual feedback from each video. The visualization is also obtained by the application, this visualization shows the video with the joint positions that were recorded including the rep count and exercise prediction. The total result is the average classification accuracy and average absolute repetition error across push-ups, squats, and all exercises combined.
 
-### results
+As an extension of the experiments, exercise form was also analyzed. Consisting of the amount of shallow reps and the actual form. The amount of shallow reps is computed on the same way as the total amount of reps, the only difference is that a threshold is set for the deepness of the exercise. The form was obtained in the same way for both the heuristic-based and learning-based approaches. Differences arise because the analysis depends on the exercise phase and predicted exercise, which vary between the approaches. Receiving results for the form analysis is harder to achieve than with the exercise prediction and rep count. The form analysis checks every frame whether a good form is achieved or whether the form is incorrect. Labeling each frame will take a lot of time, that is why an other approach is chosen. For this experiment, the labels include the number of correct repetitions, as well as the number of repetitions performed with specific form deviations (hollow back, rounded back, or forward lean).For each form type, the number of frames in which it occurs is counted and summed over the entire video. These counts are then converted into fractions representing the proportion of each form type. Each fraction is multiplied by the total number of actual repetitions to estimate the number of repetitions per form type. These estimates are then compared to the labeled counts, and the absolute error is computed for each form type.
 
+### results
+The results for exercise classification and absolute rep count error are shown in the tables below. Overall the learning based approach scores best with a higher accuracy for exercise prediction and a lower absolute rep count error. The primary challenge for the heuristic-based approach was camera placement. Additional factors that influenced model performance for both models included lighting conditions, extremely bad posture, outside frame joint positioning and abrupt video endings, where recordings stopped immediately after the final repetition.
 #### Heuristic-based
 
-| Exercise  | Accuracy exercise prediction | Absolute error reps |
+| Exercise  | Mean accuracy exercise prediction | Mean absolute error reps |
 |----------|------------------------------|---------------------|
 | Pushup   | 0.7315                       | 1.0500              |
 | Squat    | 1.0000                       | 3.0000              |
@@ -119,11 +121,27 @@ To test the model on robustness multiple experiments were conducted with video�
 
 #### Learning-based
 
-| Exercise  | Accuracy exercise prediction | Absolute error reps |
+| Exercise  | Mean accuracy exercise prediction | Mean absolute error reps |
 |----------|------------------------------|---------------------|
 | Pushup   | 1.0000                       | 0.9000              |
 | Squat    | 0.9251                       | 0.8000              |
 | Combined | 0.9625                       | 0.8500              |
+
+The results from the form analysis is are shown below. One of the most remarkable findings is the great differences between the pushup form from the heuristic-based and the learning-based approaches. Absolute errors are much higher for the heuristic-based approach. This could be a result from poor exercise classification for pushups for the heuristic based approach. In squats the difference of mean absolute error is lower. 
+### Pushup – Absolute Error per Form Type
+
+| Method           | Mean absolute error shallow rep | Mean absolute error good form | Mean absolute error rounded back | Mean absolute error hollow back |
+|------------------|----------------------------|--------------------------|------------------------------|----------------------------|
+| Heuristic-based  | 1.5000                     | 2.5658                   | 0.7938                       | 1.3645                     |
+| Learning-based   | 0.8500                     | 0.5580                   | 0.3126                       | 0.2530                     |
+
+### Squat – Absolute Error per Form Type
+
+| Method           | Mean absolute error shallow rep | Mean absolute error good form | Mean absolute error forward lean |
+|------------------|----------------------------|--------------------------|------------------------------|
+| Heuristic-based  | 0.4500                     | 0.2643                   | 0.2643                       |
+| Learning-based   | 1.5500                     | 0.3124                   | 0.1282                       |
+
 
 
 ## References
