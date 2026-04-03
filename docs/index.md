@@ -104,6 +104,21 @@ The approach to finding the deepness from the exercise was almost identical for 
 For both exercises also the form of the back is analyzed. For pushups it is important to have a straight back for the whole movement. To keep track on this, a straight line was drawn from the knee position to shoulder position. If the hip was too far from this line a threshold was exceeded, which resulted in a hollow or rounded back counter going up. For the rules it is important to normalize the threshold in this specific analyzing task. For people that are longer, the threshold needs to be higher. For the squad it is important to not lean too much forward when performing. To keep track of this, the shoulders and feet should both be on the same vertical line. When this distance is too large, the person leans too much forward. Also, in this analysis, normalization is very important.
 
 ## Results / Experiments
+### Heuristic-based
+
+| Exercise  | Accuracy exercise prediction | Absolute error reps |
+|----------|------------------------------|---------------------|
+| Pushup   | 0.7315                       | 1.0500              |
+| Squat    | 1.0000                       | 3.0000              |
+| Combined | 0.8658                       | 2.0250              |
+
+### Learning-based
+
+| Exercise  | Accuracy exercise prediction | Absolute error reps |
+|----------|------------------------------|---------------------|
+| Pushup   | 1.0000                       | 0.9000              |
+| Squat    | 0.9251                       | 0.8000              |
+| Combined | 0.9625                       | 0.8500              |
 
 ## References
 
