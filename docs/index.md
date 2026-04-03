@@ -109,7 +109,7 @@ To test the model on robustness multiple experiments were conducted with videoâ€
 
 ### results
 
-## Heuristic-based
+#### Heuristic-based
 
 | Exercise  | Accuracy exercise prediction | Absolute error reps |
 |----------|------------------------------|---------------------|
@@ -117,13 +117,13 @@ To test the model on robustness multiple experiments were conducted with videoâ€
 | Squat    | 1.0000                       | 3.0000              |
 | Combined | 0.8658                       | 2.0250              |
 
-## Learning-based
+#### Learning-based
 
 | Exercise  | Accuracy exercise prediction | Absolute error reps |
 |----------|------------------------------|---------------------|
 | Pushup   | 1.0000                       | 0.9000              |
 | Squat    | 0.9251                       | 0.8000              |
-| Combined 
+| Combined | 0.9625                       | 0.8500              |
 
 
 ## References
