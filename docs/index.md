@@ -128,14 +128,14 @@ The results for exercise classification and absolute rep count error are shown i
 | Combined | 0.9625                       | 0.8500              |
 
 The results from the form analysis is are shown below. One of the most remarkable findings is the great differences between the pushup form from the heuristic-based and the learning-based approaches. Absolute errors are much higher for the heuristic-based approach. This could be a result from poor exercise classification for pushups for the heuristic based approach. In squats the difference of mean absolute error is lower. 
-### Pushup – Absolute Error per Form Type
+#### Pushup: Absolute Error per Form Type
 
 | Method           | Mean absolute error shallow rep | Mean absolute error good form | Mean absolute error rounded back | Mean absolute error hollow back |
 |------------------|----------------------------|--------------------------|------------------------------|----------------------------|
 | Heuristic-based  | 1.5000                     | 2.5658                   | 0.7938                       | 1.3645                     |
 | Learning-based   | 0.8500                     | 0.5580                   | 0.3126                       | 0.2530                     |
 
-### Squat – Absolute Error per Form Type
+#### Squat: Absolute Error per Form Type
 
 | Method           | Mean absolute error shallow rep | Mean absolute error good form | Mean absolute error forward lean |
 |------------------|----------------------------|--------------------------|------------------------------|
