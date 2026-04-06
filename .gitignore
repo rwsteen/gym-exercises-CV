@@ -1,0 +1,7 @@
+**/__pycache__
+**/augmentation/
+**/.vscode/
+**/Penn_Action/
+*.pth
+*.mp4
+*.zip

@@ -1,0 +1,344 @@
+# run app with "streamlit run app.py"
+
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import streamlit as st
+import cv2
+import mediapipe as mp
+import numpy as np
+import torch
+import csv
+from heuristic.model import STGCN
+from form import form_analysis
+
+# load model
+NUM_CLASSES = 2
+NUM_JOINTS = 13
+model = STGCN(num_class=NUM_CLASSES, num_point=NUM_JOINTS, in_channels=3)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+model.load_state_dict(torch.load("heuristic/best_model_heuristic.pth", map_location=device))
+model.eval()
+
+# Penn Action dataset labels
+exercise_labels = [
+    "squat",
+    "pushup",
+]
+
+# MediaPipe pose landmarks to Penn Action joints mapping
+PENN_JOINTS = [
+    0,   # head 0
+    11,  # left_shoulder 1
+    12,  # right_shoulder 2
+    13,  # left_elbow 3
+    14,  # right_elbow 4
+    15,  # left_wrist 5
+    16,  # right_wrist 6
+    23,  # left_hip 7
+    24,  # right_hip 8
+    25,  # left_knee 9
+    26,  # right_knee 10
+    27,  # left_ankle 11
+    28   # right_ankle 12
+]
+
+def calculate_angle(p1, p2, p3):
+    v1 = p1 - p2
+    v2 = p3 - p2
+    cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-6)
+    angle = np.arccos(np.clip(cos_angle, -1.0, 1.0))
+    return np.degrees(angle)
+
+def extract_penn_joints(results, prev_joints=None, V=13, C=3):
+    joints = np.zeros((V, C))
+
+    if results.pose_landmarks:
+        landmarks = results.pose_landmarks.landmark
+
+        for i, mp_idx in enumerate(PENN_JOINTS):
+            lm = landmarks[mp_idx]
+
+            if lm.visibility < 0.5:  # threshold
+                if prev_joints is not None:
+                    joints[i] = prev_joints[i]  # fallback to previous frame
+                else:
+                    joints[i] = [0, 0, 0]
+            else:
+                joints[i] = [lm.x, lm.y, lm.visibility]
+
+    return joints
+    
+def normalize_joints(joints):
+    # normalize root center
+    left_hip = joints[7]
+    right_hip = joints[8]
+    hip_midpoint = (left_hip[:2] + right_hip[:2]) / 2.0
+    joints[:, :2] -= hip_midpoint
+
+    # scale normalize
+    max_val = np.max(np.abs(joints[:, :2]))
+    if max_val > 1e-6:
+        joints[:, :2] /= max_val
+    
+    return joints
+
+# Initialize MediaPipe Pose and Drawing utilities
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
+
+st.title("Exercise Detection App")
+
+video_source = st.selectbox(
+    "Select Input Source",
+    ("Webcam", "Video File")
+)
+
+video_file = None
+
+if video_source == "Video File":
+    video_file = st.file_uploader("Upload a video", type=["mp4", "mov"])
+
+start = st.button("Start")
+
+frame_placeholder = st.empty()
+
+# Feedback section below the video
+feedback_header = st.empty()
+feedback_cols_placeholder = st.empty()
+detail_placeholder = st.empty()
+
+if start:
+
+    # Set up video capture based on the selected source
+    if video_source == "Webcam":
+        cap = cv2.VideoCapture(1)
+    else:
+        tfile = open("temp.mp4", "wb")
+        tfile.write(video_file.read())
+        cap = cv2.VideoCapture("temp.mp4")
+
+    frame_count = 0
+
+    # Process video frames and extract pose landmarks with MediaPipe
+    with mp_pose.Pose(
+        model_complexity=0,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    ) as pose:
+
+        T = 32 # Number of frames to process for each sample (for model input)
+        V = 13 # Number of joints (Penn Action dataset)
+        C = 3 # only x and y coordinates as channels + visibility as a third channel
+
+        joint_buffer = [] # buffer to hold joint data for T frames
+        pred_action = "N/A" # predicted exercise class
+        pred_count = 0 # predicted rep count
+        pred_shallow_rep = 0 # count of reps that were not deep enough based on form analysis
+        prev_state = "up" # for counting reps (assumes starting in up position)
+        frame_skip = 2 # skip frames to reduce computation time
+        deepness = 0 # cumulative deepness score for current rep, reset when rep is counted
+        back_hollow = 0 # count of frames with hollow back form for pushups
+        rounded_back = 0 # count of frames with rounded back form for pushups
+        perfect_form = 0 # count of frames with perfect form reps
+        forward_bend2 = 0 # count of frames with forward bend form for squats
+        feedback = {} # dictionary to hold form feedback metrics for the last analyzed T frames
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if frame_count % frame_skip != 0:
+                frame_count += 1
+                continue
+
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image, (320, 240))
+            results = pose.process(image)
+
+            if results.pose_landmarks:
+                joints = []
+                joints = extract_penn_joints(results) # (13, 3)
+            
+                landmarks = results.pose_landmarks.landmark
+
+                left_vis_pu = (
+                    landmarks[11].visibility +  # left shoulder
+                    landmarks[13].visibility    # left elbow
+                )
+                
+                right_vis_pu = (
+                    landmarks[12].visibility +  # right shoulder
+                    landmarks[14].visibility    # right elbow
+                )
+                
+                left_vis_s = (
+                    landmarks[23].visibility +  # left hip
+                    landmarks[25].visibility    # left knee
+                )
+                
+                right_vis_s = (
+                    landmarks[24].visibility +  # right hip
+                    landmarks[26].visibility    # right knee
+                )
+
+                # Add joints to buffer
+                joints = np.array(joints) # (V, 3)
+                joint_buffer.append(joints)
+
+                if len(joint_buffer) > T:
+                    joint_buffer.pop(0) # keep only the last T frames
+
+                # Once we have T frames of joint data, run the model and get predictions
+                if len(joint_buffer) == T:
+                    normalized_joints_buffer = [normalize_joints(j) for j in joint_buffer]
+                    x = torch.from_numpy(np.array(normalized_joints_buffer).transpose(2,0,1)[None,...,None]).float().to(device) # (1, C, T, V, 1)
+
+                    # run model inference
+                    with torch.no_grad():
+                        action = model(x)
+
+                    pred_action = exercise_labels[torch.argmax(action).item()]
+
+                    raw_joint_tensor = torch.from_numpy(np.array(joint_buffer).transpose(2,0,1)[None,...,None]).float().to(device) # (1, C, T, V, 1)
+                    
+                    if pred_action == "squat":
+                        # determine which side is more visible
+                        if left_vis_s > right_vis_s:
+                            visible_side = "left"
+                        else:
+                            visible_side = "right"
+                        
+                        # Analyze form and get feedback based on exercise type, phase, and visible side
+                        deep_enough, forward_bend, feedback = form_analysis(pred_action, prev_state, raw_joint_tensor, visible_side)
+                        deepness += deep_enough
+                    
+                        # track forward bend
+                        if forward_bend == 0:
+                            perfect_form += 1
+                        else:
+                            forward_bend2 += 1
+
+                        # Calculate knee angle for counting reps from the more visible side
+                        knee_angle = 0
+                        if visible_side == "left":
+                            knee_angle = calculate_angle(joints[7,:2], joints[9,:2], joints[11,:2])
+                        else:
+                            knee_angle = calculate_angle(joints[8,:2], joints[10,:2], joints[12,:2])
+
+                        # Count reps based on phase deduced from knee angle
+                        if knee_angle < 120 and prev_state == "up":
+                            prev_state = "down"
+                        elif knee_angle > 160 and prev_state == "down":
+                            pred_count += 1
+                            prev_state = "up"
+                            if deep_enough == 0:
+                                pred_shallow_rep += 1
+                            deepness = 0
+
+                    elif pred_action == "pushup":
+                        # determine which side is more visible
+                        if left_vis_pu > right_vis_pu:
+                            visible_side = "left"
+                        else:
+                            visible_side = "right"
+                            
+                        # Analyze form and get feedback based on exercise type, phase, and visible side
+                        deep_enough, back_form, feedback = form_analysis(pred_action, prev_state, raw_joint_tensor, visible_side)
+                        deepness += deep_enough
+
+                        # Track back form
+                        if back_form > 0:
+                            rounded_back += 1
+                        elif back_form < 0:
+                            back_hollow += 1
+                        else:
+                            perfect_form += 1
+                        
+                        # Calculate elbow angle for counting reps from the more visible side
+                        elbow_angle = 0
+                        if visible_side == "left":
+                            elbow_angle = calculate_angle(joints[1,:2], joints[3,:2], joints[5,:2])
+                        else:
+                            elbow_angle = calculate_angle(joints[2,:2], joints[4,:2], joints[6,:2])
+
+                        # Count reps based on phase deduced from knee angle
+                        if elbow_angle < 90 and prev_state == "up":
+                            prev_state = "down"
+                        elif elbow_angle > 120 and prev_state == "down":
+                            pred_count += 1
+                            prev_state = "up"
+                            if deep_enough == 0:
+                                pred_shallow_rep += 1
+                            deepness = 0
+                
+                # draw the pose annotation from mediapipe on the image
+                mp_drawing.draw_landmarks(
+                    frame,
+                    results.pose_landmarks,
+                    mp_pose.POSE_CONNECTIONS
+                )
+
+                # Draw black rectangles behind the text
+                cv2.rectangle(frame, (5, 5), (300, 50), (0,0,0), -1)   # rectangle for classified exercise
+                cv2.rectangle(frame, (5, 55), (200, 100), (0,0,0), -1) # rectangle for total reps
+                cv2.rectangle(frame, (5, 115), (380, 175), (0,0,0), -1) # rectangle for shallow reps
+
+                # Overlay text on top
+                cv2.putText(frame, f"Exercise: {pred_action}", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                cv2.putText(frame, f"Reps: {pred_count}", (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                cv2.putText(frame, f"Shallow: {pred_shallow_rep}", (10, 155), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+
+
+            frame_count += 1
+
+            frame_placeholder.image(frame, channels="BGR")
+
+            if feedback:
+                feedback_header.markdown(f"### Form Feedback — {pred_action.capitalize()}")
+ 
+                with feedback_cols_placeholder.container():
+                    if pred_action == "pushup":
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Good Form", perfect_form)
+                        with col2:
+                            st.metric("Rounded Back", rounded_back)
+                        with col3:
+                            st.metric("Hollow Back", back_hollow)
+ 
+                        col4, col5, col6 = st.columns(3)
+                        with col4:
+                            body_angle = feedback.get("body_angle", 0)
+                            st.metric("Body Angle", f"{body_angle:.1f}°")
+                        with col5:
+                            elbow_angle_fb = feedback.get("bottom_elbow_angle")
+                            if elbow_angle_fb is not None:
+                                st.metric("Bottom Elbow Angle", f"{elbow_angle_fb:.1f}°")
+                        with col6:
+                            hip_deviation = feedback.get("hip_deviation", 0)
+                            st.metric("Hip Deviation", f"{hip_deviation:.4f}")
+ 
+                    elif pred_action == "squat":
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Good Form", perfect_form)
+                        with col2:
+                            st.metric("Forward Lean", forward_bend2)
+ 
+                        col3, col4, col5 = st.columns(3)
+                        with col3:
+                            lean = feedback.get("torso_lean_angle", 0)
+                            st.metric("Torso Lean", f"{lean:.1f}°")
+                        with col4:
+                            knee_angle_fb = feedback.get("bottom_knee_angle")
+                            if knee_angle_fb is not None:
+                                st.metric("Bottom Knee Angle", f"{knee_angle_fb:.1f}°")
+                        with col5:
+                            valgus = feedback.get("knee_valgus", "N/A")
+                            valgus_icon = "✅" if valgus == "good" else ("⚠️" if valgus == "mild" else "❌" if valgus == "severe" else "❓")
+                            st.markdown(f"{valgus_icon} **Knee valgus:** {valgus}")
+
+    cap.release()
