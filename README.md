@@ -40,14 +40,14 @@ pip install -r requirements.txt
 Rule/angle-based rep counting:
 
 ```bash
-python heuristic/app.py
+streamlit run heuristic/app.py
 ```
 
 ### 2) Phase approach
 Rep counting through a trained/model phase pipeline (instead of angle thresholds):
 
 ```bash
-python phase/app.py
+streamlit run phase/app.py
 ```
 
 ## Project structure (overview)
