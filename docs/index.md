@@ -86,6 +86,15 @@ Detecting incorrect form is challenging because most datasets contain only corre
 For squats and push-ups, the system checks whether each repetition is deep enough and whether the back posture is correct. For push-ups, a proper rep is when the shoulders reach the same height as the elbows, with a straight back throughout. For squats, the hips should reach knee height without leaning too far forward. Thresholds are normalized for body size to ensure fairness across users. This method allows the assistant to give specific, understandable feedback, helping users perform exercises safely and effectively.
 
 ## Results / Experiments
+### Experimental Questions
+To evaluate the virtual gym assistant, we ask the following questions:
+
+1. Exercise classification: Can the system correctly identify exercises like push-ups and squats across different participants, filming angles, and lighting conditions?
+2. Repetition counting: Can the system reliably count repetitions, even when exercise speed and depth vary?
+3. Form analysis: Can the system detect shallow repetitions or incorrect postures, and does the learning-based approach improve robustness compared to the heuristic-based approach?
+
+These questions guide the experiments and allow us to measure whether the virtual gym assistant can provide accurate, safe, and real-time feedback to users.
+
 ### Experiments
 To test the model on robustness multiple experiments were conducted with video’s that were not in the dataset. These videos were self-created and included both squats and push-up of different rep ranges and were filmed from different angles. To make variety in test data, different locations were tested, with three participants in total. The test data consisted out of 20 video’s for push-ups and 20 video’s for squats. Each video was validated separately with an accuracy for exercise prediction and an absolute error for rep counting, these metrics where automatically conducted by the application. The validation per exercise was done to also obtain visual feedback from each video. The visualization is also obtained by the application, this visualization shows the video with the joint positions that were recorded including the rep count and exercise prediction. The total result is the average classification accuracy and average absolute repetition error across push-ups, squats, and all exercises combined.
 
