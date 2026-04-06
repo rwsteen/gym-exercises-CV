@@ -52,30 +52,26 @@ The Penn Action dataset contains relatively little data per exercise, as it incl
 
 #### What Problem Does This Model Solve?
 
-Recognizing human actions from video is computationally expensive if done directly on pixels due to visual noise. A more efficient approach is to use pose data, tracking body joints over time, and classify actions from these movements. The Spatial-Temporal Graph Convolutional Network (ST-GCN) is designed to solve this problem.
+Recognizing human exercises directly from raw video frames is computationally expensive and sensitive to visual noise. A more efficient approach is to track body joints over time and classify actions based on this skeletal movement. The Spatial-Temporal Graph Convolutional Network (ST-GCN)[15] is designed for this task.
 
 #### The Body as a Graph
 
-ST-GCN represents the human skeleton as a graph, where joints are nodes and bones are edges. In this setup, 13 key joints (e.g., head, elbows, knees) are connected based on physical structure. This graph representation captures true relationships between body parts better than grid-based methods like standard CNNs.
+ST-GCN treats the human skeleton as a graph, where joints are nodes and bones are edges. This allows the model to capture natural relationships between body parts, like how elbows move relative to shoulders, better than standard grid-based methods.
 
 #### Spatial Partitioning
 
 Instead of treating all neighboring joints equally, ST-GCN divides them into three groups based on distance from a central node (the left hip): same distance, closer, or further away. Each group has its own learnable weights, allowing the model to understand how motion flows through the body. Additional learnable edge weights help the model focus on the most relevant joints for different actions.
 
-#### Graph Convolution
+#### How ST-GCN Understands Movement
 
-The spatial module (unit_gcn) propagates information across joints using weighted adjacency matrices and learned transformations. Outputs from all partitions are combined, normalized, and activated. A residual connection preserves earlier information and improves training stability.
+The model divides neighboring joints into groups based on their distance from a central joint and assigns learnable weights to each group. This helps it understand how motion flows through the body. Over time, temporal convolutions analyze sequences of frames, learning patterns like repetitions and rhythm in exercises.
 
-#### Temporal Convolution
+#### Layered Structure
 
-To capture motion over time, the temporal module (unit_tcn) applies convolution across consecutive frames (kernel size 9). This enables the model to learn dynamic patterns like repetition and rhythm in actions.
-
-#### Stacking Layers
-
-The full model stacks 4 ST-GCN blocks. Early layers capture local motion, while deeper layers learn more abstract, long-term patterns by increasing channels and reducing temporal resolution. A 4-block design offers the best balance between accuracy and efficiency, with larger models giving little added benefit and smaller ones serving as lightweight alternatives.
+ST-GCN stacks multiple blocks that combine spatial and temporal processing. Early layers capture short-term, local motion, while deeper layers learn longer-term, more abstract movement patterns. This design balances accuracy with computational efficiency, making it suitable for real-time gym assistance.
 
 ![My SVG](./stgcn_model.svg)
-*Figure 1: Pipeline of the medium size ST-GCN model for exercise classification. Input skeleton sequences are normalised via batch normalisation before passing through four backbone blocks, each containing a spatial graph convolution (GCN) and a temporal convolution (TCN). Block 3 uses a stride of 2 to halve the temporal resolution. The resulting features are collapsed via global average pooling and passed to a linear classifier to produce the final action prediction.*
+*Figure 1: Pipeline of the ST-GCN model for exercise classification. Input skeleton sequences are normalized before passing through four backbone blocks combining spatial and temporal processing. Features are then pooled and classified to predict the exercise.*
 
 ### Exercise Classification
 
