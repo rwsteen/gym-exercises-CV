@@ -1,5 +1,5 @@
 **/__pycache__
-**/augmentation/
+**/augmentation/augmented_penn/
 **/.vscode/
 **/Penn_Action/
 *.pth
