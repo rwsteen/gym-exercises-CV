@@ -8,7 +8,7 @@ Computer-vision project with two exercise rep-counting approaches:
 ## Dataset
 We used the Penn Action dataset: https://dreamdragon.github.io/PennAction/.
 We augmented this dataset with the algorithms found in the ```augmentation folder```. First we ran ```exercise_selection.py``` to get all the squat and pushup files 
-and then we used the ```augmentation.py``` to create basic augmentations and the ```loop.py``` to create loops in the examples to simulate more reps per example. We used this augmented dataset to train our models.
+and then we used the ```augmentation.py``` to create basic augmentations and the ```loop.py``` to create loops and simulate more reps per example. We used this augmented dataset to train our models.
 
 ## Prerequisites
 
