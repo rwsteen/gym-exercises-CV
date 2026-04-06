@@ -9,32 +9,19 @@
 *Group: 1 (The three R's)*
 
 ---
-<!-- 
-### TODO; figures
-
-Figures:
-
-- dataset example frames
-- GIF with demo
-- screenshot of UI?
--->
 
 ## Introduction
 
 In the last years, the popularity of the gym has been increasing. Most of these gyms have employees working in the gym to help people with exercises, but there are also a large number of gyms where no employee is present. This can cause difficulties for people who have just started to work out and have questions about certain gym exercises they are performing. To come with a solution, this blog proposes a virtual gym assistant. With new computer vision techniques like more accurate pose estimation methods, it becomes easier to track human movement. The proposed virtual gym assistant uses these techniques to classify the type of exercise, count the repetitions, and give feedback on how the exercise is performed and whether the form was correct. 
-
-In this blog, we first discuss related work to get an idea of the models that are currently used for the aforementioned computer vision tasks. Next, we introduce the dataset used in this study and explain the motivation behind its selection. Then we discuss the methods used for exercise classification, repetition counting, and form feedback. Finally, we present several experiments conducted on both test-data and unseen self-recorded exercise videos to evaluate the performance of the video.
-<!-- 
-## Problem definition
-TODO: include this in the introduction chapter
 
 The problem can be divided into multiple sub-problems:
 
 1. Pose Estimation: skeletonization of human
 2. Exercise classification
 3. Repetitive action counting: video-level or pose-level (= skeleton-level)
-4. Form analysis/feedback -->
+4. Form analysis/feedback
 
+In this blog, we first discuss related work to get an idea of the models that are currently used for the aforementioned computer vision tasks. Next, we introduce the dataset used in this study and explain the motivation behind its selection. Then we discuss the methods used for exercise classification, repetition counting, and form feedback. Finally, we present several experiments conducted on both test-data and unseen self-recorded exercise videos to evaluate the performance of the video.
 
 ## Related Work
 Our main inspiration for this project is the research done by Riccio[14]. In his paper, Riccio showed a computer vision pipeline that was able to classify exercises and count repetitions. To improve upon Riccio's work, we decided to include form analysis and feedback. And for further literature review, we looked at recent advancements in computer vision driving virtual gym assistants. These advancements can be categorized into pose estimation, exercise classification, repetitive action counting (RAC), and form analysis.
