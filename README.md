@@ -79,7 +79,7 @@ virtual-gym-assistant-CV/
 ```
 
 The two main runnable entry points are `heuristic/app.py` and `phase/app.py`.
-The `augmentation/augmented_penn/` folder contains generated dataset variants and can become large, so it is treated as derived data rather than source code.
+The `augmentation/augmented_penn/` folder contains the augmented dataset and can become large, so it is treated as derived data rather than source code.
 
 ## Notes
 
