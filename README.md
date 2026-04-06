@@ -54,13 +54,32 @@ python phase/app.py
 
 ```text
 virtual-gym-assistant-CV/
-├─ ReadMe.md
-├─ requirements.txt
-├─ heuristic/
-│  └─ app.py
-└─ phase/
-    └─ app.py
+├─ augmentation/        # Dataset preparation and augmentation scripts
+│  ├─ exercise_selection.py
+│  ├─ augmentation.py
+│  └─ loop.py
+├─ docs/                # Project blog
+├─ form.py              # Form-analysis utilities (shared between approaches)
+├─ heuristic/           # Rule-based rep counting and form analysis pipeline
+│  ├─ app.py            # Main heuristic demo entry point
+│  ├─ model.py
+│  ├─ preprocess.py
+│  └─ train.py
+├─ model_utils/         # Shared graph and temporal network building blocks
+│  ├─ gcn.py
+│  ├─ graph.py
+│  └─ tcn.py
+├─ phase/               # Learning-based phase prediction pipeline
+│  ├─ app.py            # Main phase-based demo entry point
+│  ├─ model.py
+│  ├─ preprocess.py
+│  └─ train.py
+├─ README.md
+└─ requirements.txt
 ```
+
+The two main runnable entry points are `heuristic/app.py` and `phase/app.py`.
+The `augmentation/augmented_penn/` folder contains generated dataset variants and can become large, so it is treated as derived data rather than source code.
 
 ## Notes
 
