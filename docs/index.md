@@ -9,7 +9,7 @@
 *Group: 1 (The three R's)*
 
 ---
-
+<!-- 
 ### TODO; figures
 
 Figures:
@@ -17,6 +17,7 @@ Figures:
 - dataset example frames
 - GIF with demo
 - screenshot of UI?
+-->
 
 ## Introduction
 
