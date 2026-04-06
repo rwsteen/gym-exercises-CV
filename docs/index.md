@@ -41,9 +41,9 @@ The most complex capability of a gym assistant is providing corrective feedback.
 ## Data
 
 ### Dataset
-The dataset that was used for this project was the Pen action dataset. This dataset offers a variety of movements from different sports. This dataset also includes different gym exercises like squats and pushups. A convenient aspect from this dataset is that the dataset tracks the joint positions constantly. This aspect is important for training the model, because joint positions give information about the state of the exercise and whether someone has a good form. Despite that this dataset has convenient aspects, it also has a downside. All exercises from the Penn action dataset only have one rep. For rep counting this is not ideal, because that way the system can think that all exercises only have one rep. With data augmentation this problem is resolved, while also enlarging the dataset.
+The dataset that was used for this project was the Penn action dataset[16]. This dataset offers a variety of movements from different sports. This dataset also includes different gym exercises like squats and pushups. A convenient aspect from this dataset is that the dataset tracks the joint positions constantly. This aspect is important for training the model, because joint positions give information about the state of the exercise and whether someone has a good form. Despite that this dataset has convenient aspects, it also has a downside. All exercises from the Penn action dataset only have one rep. For rep counting this is not ideal, because that way the system can think that all exercises only have one rep. With data augmentation this problem is resolved, while also enlarging the dataset.
 ### Data augmentation
-The Penn Action dataset contains relatively little data per exercise, as it includes only 2,326 videos spread across fifteen different exercises. Further the data is only limited to exercises with one rep, as discussed earlier. To expand the data to more reps, some of the videos where looped to obtain exercises with different amounts of reps. The number of reps where set to be random to obtain different rep ranges. To expand the data even further, multiple augmentations, including scaling, translating, and flipping, where applied to the data. The augmentations caused the dataset to grow with 96%, meaning that the model was trained on almost twice as much data as the original dataset.
+The Penn Action dataset contains relatively little data per exercise, as it includes only 2,326 videos spread across fifteen different exercises. Further the data is only limited to exercises with one rep, as discussed earlier. To expand the data to more reps, some of the videos were looped to obtain exercises with different amounts of reps. The number of reps were set to be random to obtain different rep ranges. To expand the data even further, multiple augmentations, including scaling, translating, and flipping, were applied to the data. The augmentations caused the dataset to grow with 96%, meaning that the model was trained on almost twice as much data as the original dataset.
 
 
 ## Methodology
@@ -161,3 +161,8 @@ The results from the form analysis is are shown below. One of the most remarkabl
 14. Riccio, R. (2024). Real-Time fitness exercise classification and counting from video frames. arXiv Preprint, arXiv:2411.11548.
 
 15. Yan, S., Xiong, Y., & Lin, D. (2018, April). Spatial temporal graph convolutional networks for skeleton-based action recognition. In Proceedings of the AAAI conference on artificial intelligence (Vol. 32, No. 1).
+    
+16. Weiyu Zhang, Menglong Zhu and Konstantinos Derpanis,  "From 
+Actemes to Action: A Strongly-supervised Representation for
+Detailed Action Understanding" International Conference on 
+Computer Vision (ICCV). Dec 2013.
