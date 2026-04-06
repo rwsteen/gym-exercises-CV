@@ -4,6 +4,7 @@ Computer-vision project with two exercise rep-counting approaches:
 
 - **Heuristic approach** (angle/rule-based): `heuristic/app.py`
 - **Phase approach** (model-based phase detection): `phase/app.py`
+- **Blog Post**: https://rwsteen.github.io/gym-exercises-CV/
 
 ## Dataset
 We used the Penn Action dataset: https://dreamdragon.github.io/PennAction/.
