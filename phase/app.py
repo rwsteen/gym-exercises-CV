@@ -72,15 +72,70 @@ video_file = None
 
 if video_source == "Video File":
     video_file = st.file_uploader("Upload a video", type=["mp4", "mov"])
+    
+st.subheader("Ground Truth / Manual Labels")
+
+true_exercise = st.selectbox(
+    "True exercise",
+    exercise_labels
+)
+
+true_reps = st.number_input(
+    "True reps",
+    min_value=0,
+    step=1,
+    value=0
+)
+
+true_shallow = st.number_input(
+    "True shallow reps",
+    min_value=0,
+    step=1,
+    value=0
+)
+
+true_good_form = st.number_input(
+    "True good form reps",
+    min_value=0,
+    step=1,
+    value=0
+)
+
+true_rounded = 0
+true_hollow = 0
+true_forward_bend = 0
+
+
+if true_exercise == "pushup":
+    true_rounded = st.number_input(
+        "True rounded back reps",
+        min_value=0,
+        step=1,
+        value=0
+    )
+    true_hollow = st.number_input(
+        "True hollow back reps",
+        min_value=0,
+        step=1,
+        value=0
+    )
+
+elif true_exercise == "squat":
+    true_forward_bend = st.number_input(
+        "True forward bend reps",
+        min_value=0,
+        step=1,
+        value=0
+    )
 
 start = st.button("Start")
 
 frame_placeholder = st.empty()
-
 # Feedback section below the video
 feedback_header = st.empty()
 feedback_cols_placeholder = st.empty()
 detail_placeholder = st.empty()
+
 
 if start:
 
@@ -93,6 +148,7 @@ if start:
         cap = cv2.VideoCapture("temp.mp4")
 
     frame_count = 0
+    correct_exercise = 0
 
     # Process video frames and extract pose landmarks with MediaPipe
     with mp_pose.Pose(
@@ -109,7 +165,7 @@ if start:
         pred_action = "N/A"
         pred_count = 0
         pred_shallow_rep = 0
-        deepness = 0
+        deepnes = 0
         prev_phase = "N/A"
         frame_skip = 4 # skip frames to reduce computation time
         back_hollow = 0
@@ -117,6 +173,7 @@ if start:
         perfect_form = 0
         forward_bend2 = 0
         feedback = {}
+        acc_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -198,19 +255,17 @@ if start:
                     
                     if pred_action == "pushup":
                         deep_enough, back_form, feedback = form_analysis(pred_action, prev_phase, x, visible_side)
-                        deepness += deep_enough
-
+                        deepnes += deep_enough
                         if back_form > 0:
                             rounded_back += 1
                         elif back_form < 0:
                             back_hollow += 1
                         else:
                             perfect_form += 1
-                
+                        print(deepnes)
                     if pred_action == "squat":
                         deep_enough, forward_bend, feedback = form_analysis(pred_action, prev_phase, x, visible_side)
-                        deepness += deep_enough
-
+                        deepnes += deep_enough
                         if forward_bend == 0:
                             perfect_form += 1
                         else:
@@ -219,14 +274,19 @@ if start:
 
                     if prev_phase == "N/A":
                         prev_phase = "up" if phase > 0.5 else "down"
-                    elif prev_phase == "up" and phase < 0.4:
+                    elif prev_phase == "up" and phase < 0.5:
                         prev_phase = "down"
-                    elif prev_phase == "down" and phase > 0.6:
+                    elif prev_phase == "down" and phase > 0.55:
                         pred_count += 1
                         prev_phase = "up"
-                        if deepness == 0:
+                        if deepnes == 0:
                             pred_shallow_rep += 1
-                        deepness = 0
+                        deepnes = 0
+                    
+                    acc_count += 1
+                    if pred_action == true_exercise:
+                        correct_exercise += 1 
+                    acc_exercise = correct_exercise/acc_count
                 
                 mp_drawing.draw_landmarks(
                     frame,
@@ -237,21 +297,46 @@ if start:
                 cv2.putText(frame, f"Exercise: {pred_action}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
                 cv2.putText(frame, f"Count: {pred_count}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
                 cv2.putText(frame, f"Shallow: {pred_shallow_rep}", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-                if pred_action == "pushup":
-                    cv2.putText(frame, f"Hollow back: {back_hollow}, Rounded back: {rounded_back}, Good form: {perfect_form}", (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-                if pred_action == "squat":
-                    cv2.putText(frame, f"Forward bend: {forward_bend2}, Good form: {perfect_form}", (10, 800), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
-
+                
 
             frame_count += 1
 
             frame_placeholder.image(frame, channels="BGR")
-
+            
+            #absolute error reps
+            ab_error = abs(true_reps - pred_count)
+            ab_error_shallow = abs(true_shallow - pred_shallow_rep)
+            
+            #absolute error form
+            frame_count2 = perfect_form + back_hollow + rounded_back + forward_bend2 + 1e-10
+            perfect_frames = perfect_form / frame_count2
+            hollow_frames = back_hollow / frame_count2
+            rounded_frames = rounded_back / frame_count2
+            forward_frames = forward_bend2 / frame_count2
+            perfect_fraq = perfect_frames * true_reps
+            hollow_fraq = hollow_frames * true_reps
+            rounded_fraq = rounded_frames * true_reps
+            forward_fraq = forward_frames * true_reps
+            ab_perfect = abs(true_good_form - perfect_fraq)
+            ab_hollow = abs(true_hollow - hollow_fraq)
+            ab_rounded = abs(true_rounded - rounded_fraq)
+            ab_forward = abs(true_forward_bend - forward_fraq)
+            
             if feedback:
                 feedback_header.markdown(f"### Form Feedback — {pred_action.capitalize()}")
  
                 with feedback_cols_placeholder.container():
+                    col10, col11, col12, col13 = st.columns(4)
+                    with col10:
+                        st.metric("Absolute perfect rep count error", f"{ab_perfect:.4f}")
+                    with col11:
+                        st.metric("Absolute hollow back count error", f"{ab_hollow:.4f}")
+                    with col12:
+                        st.metric("Absolute rounded back count error", f"{ab_rounded:.4f}")
+                    with col13:
+                        st.metric("Absolute forward bend count error", f"{ab_forward:.4f}")
                     if pred_action == "pushup":
+                        
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Good Form", perfect_form)
@@ -271,6 +356,14 @@ if start:
                         with col6:
                             hip_deviation = feedback.get("hip_deviation", 0)
                             st.metric("Hip Deviation", f"{hip_deviation:.4f}")
+                        col7, col8, col9 = st.columns(3)
+                        with col7:
+                            st.metric("Exercise accuracy", f"{acc_exercise:.4f}")
+                        with col8:
+                            st.metric("Absolute rep count error", f"{ab_error:.4f}")
+                        with col9:
+                            st.metric("Absolute shallow count error", f"{ab_error_shallow:.4f}")
+                        
  
                     elif pred_action == "squat":
                         col1, col2 = st.columns(2)
@@ -291,4 +384,13 @@ if start:
                             valgus = feedback.get("knee_valgus", "N/A")
                             valgus_icon = "✅" if valgus == "good" else ("⚠️" if valgus == "mild" else "❌" if valgus == "severe" else "❓")
                             st.markdown(f"{valgus_icon} **Knee valgus:** {valgus}")
+                        col6, col7, col8 = st.columns(3)
+                        with col6:
+                            st.metric("Exercise accuracy", f"{acc_exercise:.4f}")
+                        with col7:
+                            st.metric("Absolute rep count error", f"{ab_error:.4f}")  
+                        with col8:
+                            st.metric("Absolute shallow count error", f"{ab_error_shallow:.4f}")
+                        
+
     cap.release()
