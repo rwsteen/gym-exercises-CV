@@ -19,7 +19,7 @@ NUM_JOINTS = 13
 model = STGCN(num_class=NUM_CLASSES, num_point=NUM_JOINTS, in_channels=3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
-model.load_state_dict(torch.load("heuristic/best_model_heuristic.pth", map_location=device))
+model.load_state_dict(torch.load("heuristic/best_model_heuristic_final.pth", map_location=device))
 model.eval()
 
 # Penn Action dataset labels
@@ -100,6 +100,61 @@ video_file = None
 
 if video_source == "Video File":
     video_file = st.file_uploader("Upload a video", type=["mp4", "mov"])
+    
+st.subheader("Ground Truth / Manual Labels")
+
+true_exercise = st.selectbox(
+    "True exercise",
+    exercise_labels
+)
+
+true_reps = st.number_input(
+    "True reps",
+    min_value=0,
+    step=1,
+    value=0
+)
+
+true_shallow = st.number_input(
+    "True shallow reps",
+    min_value=0,
+    step=1,
+    value=0
+)
+
+true_good_form = st.number_input(
+    "True good form reps",
+    min_value=0,
+    step=1,
+    value=0
+)
+
+true_rounded = 0
+true_hollow = 0
+true_forward_bend = 0
+
+
+if true_exercise == "pushup":
+    true_rounded = st.number_input(
+        "True rounded back reps",
+        min_value=0,
+        step=1,
+        value=0
+    )
+    true_hollow = st.number_input(
+        "True hollow back reps",
+        min_value=0,
+        step=1,
+        value=0
+    )
+
+elif true_exercise == "squat":
+    true_forward_bend = st.number_input(
+        "True forward bend reps",
+        min_value=0,
+        step=1,
+        value=0
+    )
 
 start = st.button("Start")
 
@@ -121,6 +176,7 @@ if start:
         cap = cv2.VideoCapture("temp.mp4")
 
     frame_count = 0
+    correct_exercise = 0
 
     # Process video frames and extract pose landmarks with MediaPipe
     with mp_pose.Pose(
@@ -145,6 +201,7 @@ if start:
         perfect_form = 0 # count of frames with perfect form reps
         forward_bend2 = 0 # count of frames with forward bend form for squats
         feedback = {} # dictionary to hold form feedback metrics for the last analyzed T frames
+        acc_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -273,6 +330,10 @@ if start:
                             if deep_enough == 0:
                                 pred_shallow_rep += 1
                             deepness = 0
+                    acc_count += 1
+                    if pred_action == true_exercise:
+                        correct_exercise += 1 
+                    acc_exercise = correct_exercise/acc_count
                 
                 # draw the pose annotation from mediapipe on the image
                 mp_drawing.draw_landmarks(
@@ -296,10 +357,39 @@ if start:
 
             frame_placeholder.image(frame, channels="BGR")
 
+            #absolute error reps
+            ab_error = abs(true_reps - pred_count)
+            ab_error_shallow = abs(true_shallow - pred_shallow_rep)
+            
+            #absolute error form
+            frame_count2 = perfect_form + back_hollow + rounded_back + forward_bend2 + 1e-10
+            perfect_frames = perfect_form / frame_count2
+            hollow_frames = back_hollow / frame_count2
+            rounded_frames = rounded_back / frame_count2
+            forward_frames = forward_bend2 / frame_count2
+            perfect_fraq = perfect_frames * true_reps
+            hollow_fraq = hollow_frames * true_reps
+            rounded_fraq = rounded_frames * true_reps
+            forward_fraq = forward_frames * true_reps
+            ab_perfect = abs(true_good_form - perfect_fraq)
+            ab_hollow = abs(true_hollow - hollow_fraq)
+            ab_rounded = abs(true_rounded - rounded_fraq)
+            ab_forward = abs(true_forward_bend - forward_fraq)
+            
             if feedback:
                 feedback_header.markdown(f"### Form Feedback — {pred_action.capitalize()}")
  
                 with feedback_cols_placeholder.container():
+                    col10, col11, col12, col13 = st.columns(4)
+                    with col10:
+                        st.metric("Absolute perfect rep count error", f"{ab_perfect:.4f}")
+                    with col11:
+                        st.metric("Absolute hollow back count error", f"{ab_hollow:.4f}")
+                    with col12:
+                        st.metric("Absolute rounded back count error", f"{ab_rounded:.4f}")
+                    with col13:
+                        st.metric("Absolute forward bend count error", f"{ab_forward:.4f}")
+                    
                     if pred_action == "pushup":
                         col1, col2, col3 = st.columns(3)
                         with col1:
@@ -320,6 +410,14 @@ if start:
                         with col6:
                             hip_deviation = feedback.get("hip_deviation", 0)
                             st.metric("Hip Deviation", f"{hip_deviation:.4f}")
+                        col7, col8, col9 = st.columns(3)
+                        with col7:
+                            st.metric("Exercise accuracy", f"{acc_exercise:.4f}")
+                        with col8:
+                            st.metric("Absolute rep count error", f"{ab_error:.4f}")
+                        with col9:
+                            st.metric("Absolute shallow count error", f"{ab_error_shallow:.4f}")
+                    
  
                     elif pred_action == "squat":
                         col1, col2 = st.columns(2)
@@ -340,5 +438,12 @@ if start:
                             valgus = feedback.get("knee_valgus", "N/A")
                             valgus_icon = "✅" if valgus == "good" else ("⚠️" if valgus == "mild" else "❌" if valgus == "severe" else "❓")
                             st.markdown(f"{valgus_icon} **Knee valgus:** {valgus}")
+                        col6, col7, col8 = st.columns(3)
+                        with col6:
+                            st.metric("Exercise accuracy", f"{acc_exercise:.4f}")
+                        with col7:
+                            st.metric("Absolute rep count error", f"{ab_error:.4f}")  
+                        with col8:
+                            st.metric("Absolute shallow count error", f"{ab_error_shallow:.4f}")
 
     cap.release()
